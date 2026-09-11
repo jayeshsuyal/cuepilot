@@ -98,6 +98,18 @@ class CuePilotTests(unittest.TestCase):
         self.assertEqual(first,second)
         self.assertEqual(self.client.get(f"/api/v1/runs/{run['id']}").json()['nextStep'],1)
 
+    def test_delayed_operator_intent_keeps_its_step_after_another_tab_advances(self):
+        run = self.create()
+        url = f"/api/v1/runs/{run['id']}/advance"
+        other_tab = self.client.post(url, json={'requestId': 'other-tab', 'stepIndex': 0}, headers=self.operator)
+        self.assertEqual(other_tab.status_code, 200)
+        delayed = self.client.post(url, json={'requestId': 'delayed-intent', 'stepIndex': 0}, headers=self.operator)
+        self.assertEqual(delayed.json(), other_tab.json())
+        self.assertEqual(self.client.get(f"/api/v1/runs/{run['id']}").json()['nextStep'], 1)
+        wrong_step = self.client.post(url, json={'requestId': 'delayed-intent', 'stepIndex': 1}, headers=self.operator)
+        self.assertEqual(wrong_step.status_code, 409)
+        self.assertEqual(self.client.get('/api/v1/stage').json()['scene'], 'intro')
+
     def test_concurrent_retry_commits_one_cue(self):
         run = self.create()
         store = self.app.state.store

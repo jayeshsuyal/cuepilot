@@ -34,8 +34,10 @@ pnpm dev:cuepilot
 
 On the existing demo machine, the Python environment is already installed.
 The API listens on **http://127.0.0.1:8787**; interactive API docs are at `/docs`.
-The frontend will run separately from `cuepilot/web/`, with `/api` proxied to the
-backend. Its package and screen implementation belong to the teammate.
+The integrated frontend runs separately from `cuepilot/web/`, with `/api` proxied
+to the backend. Configure the operator token privately as described in its
+[README](cuepilot/web/README.md), then run `pnpm --dir cuepilot/web dev`.
+The desk is at **http://127.0.0.1:5173/** and the projected output at `/stage`.
 
 On first startup, the API creates private local operator and bridge tokens in
 `cuepilot/.env`. Preserve those values when adding entries from

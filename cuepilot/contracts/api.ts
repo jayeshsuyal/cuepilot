@@ -16,7 +16,8 @@ export interface ApiError { detail: { code: string; message: string } }
 // GET /api/v1/runs -> Run[]; GET /api/v1/runs/:id -> Run
 // POST /api/v1/runs {speakerId, executionMode:'practice'|'live', notes?} -> Run
 // POST /api/v1/runs/:id/approve {planHash} -> Run
-// POST /api/v1/runs/:id/advance {requestId} -> CueReceipt (practice only)
+// POST /api/v1/runs/:id/advance {requestId,stepIndex?} -> CueReceipt (practice only)
+// New clients freeze stepIndex with requestId so a delayed retry cannot cue another step.
 // POST /api/v1/runs/:id/execute {} -> Run (live, RocketRide -> Rote)
 // POST /api/v1/runs/:id/cancel {} -> Run (holds stage, waits for driver cleanup)
 // Live omitted notes inherit current production notes; changed notes invalidate old approvals.

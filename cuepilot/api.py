@@ -474,6 +474,7 @@ class Approval(StrictModel):
 
 class Advance(StrictModel):
     requestId: str = Field(min_length=1, max_length=100, pattern=r"^[A-Za-z0-9_-]+$")
+    stepIndex: int | None = Field(default=None, ge=0, le=2)
 
 
 class CueCommand(Advance):
@@ -693,7 +694,7 @@ def create_app(db_path=None, operator_token=None, bridge_token=None):
 
     @app.post("/api/v1/runs/{run_id}/advance", dependencies=[operator])
     def advance(run_id: str, command: Advance):
-        return store.cue(run_id, None, command.requestId, practice_only=True)
+        return store.cue(run_id, command.stepIndex, command.requestId, practice_only=True)
 
     @app.post("/api/v1/runs/{run_id}/execute", dependencies=[operator], status_code=202)
     async def execute(run_id: str):

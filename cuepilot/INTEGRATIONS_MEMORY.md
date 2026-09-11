@@ -118,6 +118,15 @@ recall 20 seconds, and outcome operations 30 seconds. No credentials are returne
 
 ## Hotdata snapshots and current readiness
 
+Live API verification passed on September 11 at 20:54 UTC using the supplied API
+token directly: Maya passed, Ravi reused that snapshot with a new verified query,
+and Alex's changed revision returned a verified missing-asset query and correctly
+blocked execution. This created two synthetic snapshot databases with one-hour
+expiry requested, two load receipts and three query IDs. Private redacted report:
+`cuepilot/.runtime/hotdata-checks/readiness-20260911T205439.476554Z.json`.
+This verifies Hotdata independently; Cognee extraction and full RocketRide
+orchestration remain separate live gates.
+
 Hotdata needs a read-write [API token](https://www.hotdata.dev/docs/core-concepts#authentication)
 for the chosen workspace, supplied as `HOTDATA_API_KEY` and `HOTDATA_WORKSPACE`.
 `X-Database-Id` selects query scope; it is not a second credential.
