@@ -1,66 +1,171 @@
 # Memory and current-state adapters
 
-`cuepilot.integrations.memory` exposes async `ingest_note(note, source_id)` and
-`recall_recipe(show_id)`. Pass `source_id=show.id`. Both return an overall
-`status`, `records` containing `{provider,status,operation,evidence,reason}`, and
-`reason`. Verified results include `supported_template`, `recipe_id`,
-`note_sha256`, `graph_sha256`, and `source_id`. The API must compare `note_sha256`
-with the current production note before using the template.
+The public async entry points remain `ingest_note(note, source_id)`,
+`recall_recipe(show_id)` and `validate_show(show, speaker_id)`. Pass the actual
+show ID as `source_id`. Results contain `status`, `records` of
+`{provider,status,operation,evidence,reason}`, and `reason`. Memory verification
+includes `supported_template`, `recipe_id`, `note_sha256`, `graph_sha256`, and
+`source_id`; Hotdata verification includes `show_revision`. The API must compare
+these with the run's exact note and current show revision before using them.
+Failure, unavailable configuration, incomplete processing, and stale evidence
+never become fixtures or sponsor success.
 
-Ingestion uses the [documented remember endpoint](https://docs.cognee.ai/api-reference/remember/remember)
-and [dataset graph endpoint](https://docs.cognee.ai/api-reference/datasets/get-dataset-graph).
-Its multipart fields and `X-Api-Key` header match installed Cognee 1.5.4's Cloud
-client. It uses HTTP directly, without importing Cognee or changing its global
-SDK session. Credentials are `COGNEE_SERVICE_URL` and `COGNEE_API_KEY`, supplied
-by the caller's environment; the configured URL must be HTTPS under cognee.ai.
-Importing the module does not load credentials or call a provider. Calling
-configured ingestion consumes hosted credits; no such live processing was run
-while implementing this adapter.
+## Cognee extraction and repeat runs
+
+The [official Cloud client](https://github.com/topoteretes/cognee/blob/main/cognee/api/v1/serve/cloud_client.py)
+confirms multipart file field `data`, form fields `datasetName` / `custom_prompt`,
+and `X-Api-Key`. The adapter calls the blocking
+[remember endpoint](https://docs.cognee.ai/api-reference/remember/remember),
+requires `status=completed` without an explicit error, validates the returned
+dataset UUID and optional dataset name, then fetches its
+[dataset graph](https://docs.cognee.ai/api-reference/datasets/get-dataset-graph).
+A valid completion can have ID-only `items`; missing item names or content hashes
+are not themselves failures. `running`, malformed completion and unresolved
+exports cannot verify a recipe. It uses HTTP directly and does not import or
+change Cognee's global SDK session.
 
 The graph must actually contain directed introduction → presentation → holding
-relationships and unavailable-speaker/presentation → holding fallback rules.
-Only the small explicit vocabulary in `_prove_template` is accepted. A custom
-extraction prompt suggests that vocabulary but cannot itself verify a plan.
-Empty, unsupported, conflicting, or unresolvable graph exports block execution.
-The visualization graph API omits edge properties; provenance here is at dataset
-and source-note level, not per-text-span evidence.
+relationships and unavailable-speaker/presentation → holding fallbacks. The small
+explicit vocabulary in `_prove_template` is deliberately limited to this segment.
+An extraction prompt suggests vocabulary but cannot prove a plan. Missing rules,
+duplicate recognized entities, contradictory ordering, and unavailable → another
+scene fallbacks block even when the expected edges also exist. Canonical node and
+edge ordering makes graph hashes stable across export reordering; duplicate edges
+and original node IDs/properties/relationship labels remain represented.
 
-Only a verified graph is written to the existing loopback HydraDB through the
-installed Neo4j driver. Original node IDs/properties and relationship labels are
-preserved alongside dataset ID, source ID, note hash, and graph hash. All Cypher
-values are parameters. Imported relationship traversals and the final recipe
-payload must read back correctly. Interrupted imports may leave isolated graph
-data; the recipe is published last. Recall rechecks the stored provenance,
-digest and relationship proof. It currently emits a HydraDB record; the stored
-Cognee provenance is inside that record's evidence. The caller must not invent a
-fresh Cognee success record. There is no outcome/learned-procedure write-back yet.
+The visualization graph API omits edge properties. Provenance is at dataset and
+source-note level, not per-text-span attribution. `COGNEE_SERVICE_URL` must be an
+HTTPS cognee.ai tenant URL, and `COGNEE_API_KEY` comes from the caller's environment.
+No provider call or credential loading occurs on import.
 
-Hydra reads `HYDRADB_BOLT_URL` (default `bolt://127.0.0.1:7687`),
-`HYDRADB_GRAPH_ID` (default `default`), and `HYDRADB_AUTH_TOKEN`, falling back to
-the private setup token file. Remote Hydra endpoints are rejected. Graph exports
-are bounded to 2 MB, 200 nodes and 400 edges; ingestion has a 150-second total
-deadline and recall 20 seconds. This application-specific persistence path has
-not yet been exercised against the running Hydra service. The earlier sponsor
-setup smoke verified simpler graph writes and traversal only.
+An initial ingest reads Hydra first, then performs hosted Cognee extraction only
+when there is no current recipe for the exact note hash. Repeating the same note
+performs real Hydra traversal and a fresh Cognee dataset export, compares its hash
+and rules, and returns `reexport_unchanged_graph` evidence with
+`reused_extraction=true`. It makes no new remember call. A failed re-export or
+changed graph blocks reuse. `recall_recipe` independently performs actual Hydra
+reads and returns only a Hydra record with stored Cognee provenance inside it;
+callers must not invent a fresh Cognee success from a local recall alone.
 
-`cuepilot.integrations.hotdata.validate_show(show, speaker_id)` accepts the
-shared contract: show `id/revision`, speaker `ready/presentationAssetId`, and
-slide asset `status`. It requires `HOTDATA_API_KEY` and `HOTDATA_WORKSPACE`.
-It [creates a temporary database](https://www.hotdata.dev/docs/core-concepts)
-with a one-hour expiry, [publishes one CSV snapshot and queries it](https://www.hotdata.dev/docs/push-data)
-using fixed API paths and a restricted SQL template. Each validation uses a new
-database to avoid mixing revisions. It verifies the actual returned revision,
-speaker readiness, and matching asset against the submitted snapshot.
+## Hydra graph and successful outcomes
 
-The Hotdata result includes `ready`, `records`, and overall `status`. A verified
-query reporting an unavailable speaker/asset produces overall `blocked`; stay on
-holding. Accept `show_revision` only when overall status is `verified`, then
-compare it with the current revision before planning/execution. Validation has
-a 60-second total deadline; partial failures leave at most the expiring database.
-No Hotdata live write/query was run during implementation. Neither adapter
-creates accounts, changes billing, follows redirects, accepts user URLs/SQL, or
-returns provider error bodies or credentials.
+Hydra uses the existing Neo4j driver against a loopback Bolt endpoint. Its
+[Cypher implementation](https://github.com/hydra-db/hydradb/blob/main/src/query/opencypher.rs)
+supports the `UNWIND` vertex-upsert and relationship-create forms used here; plain
+node `CREATE`, ordinary `MATCH … CREATE`, and `MERGE … ON CREATE` are unsuitable.
+The adapter uses auto-commit operations because Hydra does not support
+[transactions spanning multiple RUN requests](https://github.com/hydra-db/hydradb/blob/main/architecture.md).
+All provider values are parameters and all query templates are fixed.
 
-Remaining validation: exercise the full Cloud export → Hydra persistence flow
-after credentials and live processing are authorized, then test a real Hotdata
-snapshot/query. Mocked/offline checks cannot establish sponsor-backed execution.
+Each import has a separate receipt identity. Vertices retain their original
+Cognee payload plus dataset/source/note/graph provenance. Edges retain labels,
+dataset and receipt identity, with explicit IDs for parallel relationships.
+Before publishing a recipe, the adapter reads back every vertex and the exact
+outgoing relationship multiset. Recall repeats these checks against the actual
+stored graph, verifies its digest and rule proof, and rejects changed or missing
+vertices/edges. An interrupted import cannot publish a complete recipe. Envelope
+version 2 is required; legacy version 1 JSON-only proof is rejected and no silent
+migration is attempted.
+
+New internal entry points, with no public route or contract change in this task:
+
+```python
+await record_successful_outcome(
+    source_id=show_id, note_sha256=note_hash, graph_sha256=graph_hash,
+    recipe_id=recipe_id, run=completed_run,
+    rote_result=verified_rote_result, procedure={"id": package_name, "sha256": proof_hash},
+)
+await recall_successful_outcome(
+    show_id, note_sha256=note_hash, graph_sha256=graph_hash,
+    recipe_id=recipe_id, procedure={"id": package_name, "sha256": proof_hash},
+)
+```
+
+The coordinator must provide trusted server state, not client-authored evidence.
+A write requires a completed **live** run, its exact note hash, a sponsor plan
+whose `recipeId` matches, and `run.memoryProof` with matching
+`source_id/note_sha256/graph_sha256/recipe_id` captured before execution. It also
+requires exactly three ordered successful intro/presentation/holding receipts
+with consecutive stage revisions, and verified Rote `learn` or `replay` evidence
+for that run and those receipts. `rote_result.evidence.procedure` must equal the
+supplied immutable `{id,sha256}` identity. Full Rote receipt fields are compared
+with committed receipts; the older learning helper's raw HTTP receipt hashes are
+also checked exactly when full receipts are absent. Practice or partial runs
+cannot publish a live outcome. No prior outcome trace is required.
+
+The outcome ID deterministically hashes its rule/procedure binding and run ID.
+Hydra's [atomic generation guard](https://github.com/hydra-db/hydradb/blob/main/src/shard/write.rs)
+uses constant generation 1 so a retry cannot replace stored proof. Exact read-back
+makes conflicting retries fail. Recall requires the current recipe, exact note
+and graph hashes, and exact procedure; it checks outcome and receipt digests.
+Re-extracting a note into a different recipe invalidates reuse of earlier outcomes.
+Outcome metadata is historical proof, never current speaker/asset readiness.
+The API remains responsible for current run/show checks and serializing run
+mutations while adapter work is in flight.
+
+Both outcome operations return `status`, `records`, `reason`, `outcome_id`,
+`source_id`, `note_sha256`, `graph_sha256`, `recipe_id`, `procedure`,
+`supported_template`, and `execution` on success. `execution` contains `run_id`,
+`execution_mode`, `show_revision`, `plan_sha256`, `speaker_id`, `operation`,
+`receipts`, `receipts_sha256`, and `rote_run_id`. The Hydra record's evidence has
+those binding and execution fields plus `read_back_verified=true`.
+
+Hydra configuration is `HYDRADB_BOLT_URL` (default `bolt://127.0.0.1:7687`),
+`HYDRADB_GRAPH_ID` (default `default`) and `HYDRADB_AUTH_TOKEN`, falling back to the
+private setup token file. Remote Hydra URLs are rejected. Graph exports are
+bounded to 2 MB, 200 nodes and 400 edges. Ingestion has a 150-second total deadline,
+recall 20 seconds, and outcome operations 30 seconds. No credentials are returned.
+
+## Hotdata snapshots and current readiness
+
+Hotdata needs a read-write [API token](https://www.hotdata.dev/docs/core-concepts#authentication)
+for the chosen workspace, supplied as `HOTDATA_API_KEY` and `HOTDATA_WORKSPACE`.
+`X-Database-Id` selects query scope; it is not a second credential.
+The adapter [creates a temporary database](https://www.hotdata.dev/docs/api-reference/databases),
+requests a one-hour best-effort expiry, loads one immutable CSV snapshot with
+explicit column types, and verifies the synchronous load receipt's connection,
+schema, table and row count. This avoids numeric-looking IDs being inferred as
+numbers. An HTTP 202 background acceptance cannot establish publication.
+
+A [fresh synchronous query](https://www.hotdata.dev/docs/api-reference/query)
+checks selected speaker readiness and its matching presentation. The result must
+have the exact columns, one preview row, one total row, no truncation, a query-run
+ID, and the exact typed snapshot values. A null persisted result ID is supported
+when the full result is inline. A deprecated `row_count` alone is insufficient.
+A verified query reporting unavailable speaker/asset produces overall `blocked`;
+stay on holding. Only use `show_revision` when overall status is `verified`, then
+compare it again with the current show revision.
+
+A bounded process-local cache retains at most 16 proved snapshot references for
+55 minutes, keyed by workspace, credential digest and complete snapshot hash.
+Another speaker on the same snapshot reuses the database but makes a real query
+and reports `snapshot_reused=true`. A revision or content change publishes a new
+database. Errors evict that reference and remain failed/blocked; they do not
+silently retry against a fixture. Concurrent cache misses may create duplicate
+expiring databases. Cache state is not durable. Results retain the captured
+revision even if the caller mutates its input during I/O.
+
+Validation has a 60-second deadline. Partial failures may leave an expiring
+database. The adapter uses fixed endpoints, restricted SQL and identifier
+validation; it does not accept caller URLs/SQL or follow redirects.
+
+## Verification scope
+
+The focused offline suites exercise provider HTTP response shapes, extraction
+completion, graph normalization/proof, driver-boundary graph corruption and
+provenance, idempotent outcome read/write, stale rule/procedure rejection, and
+Hotdata publication/query/revision mismatch. Driver-boundary tests do not execute
+the Hydra parser. This task made no live sponsor calls and copied no credentials.
+The coordinator must exercise the full Cognee → Hydra path, guarded outcome
+write/read and real Hotdata load/query against the running services. In particular,
+the installed Hydra build must accept the documented guarded-upsert dialect.
+No source-only or mocked check establishes live sponsor success.
+
+Validation for this change: `pnpm test:cuepilot` passed 59 tests, including 47 new
+focused provider/persistence tests. `pnpm security:code` completed with no reported
+source findings after a sandbox DNS failure was retried with network access.
+Final `pnpm security:scan` completed: source 0, Node 1 high advisory, optional setup
+Python 5 advisories (1 critical, 2 high, 2 medium). These are the same unresolved
+dependency advisories documented in `SECURITY.md`; no dependency was changed,
+ignored or removed to obtain a pass. Final scan evidence is Git-ignored under
+`sponsor-setup/snyk/reports/20260911T203030.356637Z/` in this worktree.
