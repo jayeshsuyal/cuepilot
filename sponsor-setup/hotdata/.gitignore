@@ -1,0 +1,6 @@
+bin/
+downloads/
+.env
+.env.local
+*.log
+reports/

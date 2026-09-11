@@ -1,0 +1,8 @@
+{
+  "rocketride.development.connectionMode": "cloud",
+  "rocketride.development.useCustomServer": true,
+  "rocketride.development.cloudUrl": "https://staging.rocketride.ai",
+  "rocketride.deployment.connectionMode": "cloud",
+  "rocketride.deployment.useCustomServer": true,
+  "rocketride.deployment.cloudUrl": "https://staging.rocketride.ai"
+}

@@ -1,0 +1,41 @@
+{
+  "version": "1.1307.2",
+  "assets": {
+    "snyk-alpine": {
+      "url": "https://downloads.snyk.io/cli/v1.1307.2/snyk-alpine",
+      "sha256": "ecd42fbccaac3ff903dfbcdbb8951282e3e839eb5a606889f6864340aaef43d1  snyk-alpine",
+      "sha256Url": "https://downloads.snyk.io/cli/v1.1307.2/snyk-alpine.sha256"
+    },
+    "snyk-alpine-arm64": {
+      "url": "https://downloads.snyk.io/cli/v1.1307.2/snyk-alpine-arm64",
+      "sha256": "snyk-alpine-arm64-sha256",
+      "sha256Url": "https://downloads.snyk.io/cli/v1.1307.2/snyk-alpine-arm64.sha256"
+    },
+    "snyk-linux": {
+      "url": "https://downloads.snyk.io/cli/v1.1307.2/snyk-linux",
+      "sha256": "40453156449604129f6ed5cb98eb0c9aca27facd7dd8161d9c9828618b62e703  snyk-linux",
+      "sha256Url": "https://downloads.snyk.io/cli/v1.1307.2/snyk-linux.sha256"
+    },
+    "snyk-linux-arm64": {
+      "url": "https://downloads.snyk.io/cli/v1.1307.2/snyk-linux-arm64",
+      "sha256": "612f94d50e7373ce8304a5924531cd08f9b9df592015b3d70bbf58b0bd2e45cc  snyk-linux-arm64",
+      "sha256Url": "https://downloads.snyk.io/cli/v1.1307.2/snyk-linux-arm64.sha256"
+    },
+    "snyk-macos": {
+      "url": "https://downloads.snyk.io/cli/v1.1307.2/snyk-macos",
+      "sha256": "06dd3b1116629f50745a922ee9487dbc7dff251bebfbef0d538ac9b7c0e034bd  snyk-macos",
+      "sha256Url": "https://downloads.snyk.io/cli/v1.1307.2/snyk-macos.sha256"
+    },
+    "snyk-macos-arm64": {
+      "url": "https://downloads.snyk.io/cli/v1.1307.2/snyk-macos-arm64",
+      "sha256": "afea33edbd274d41f2b0e094275f6814db778e173e10e0a5648232d6e6bb7a14  snyk-macos-arm64",
+      "sha256Url": "https://downloads.snyk.io/cli/v1.1307.2/snyk-macos-arm64.sha256"
+    },
+    "snyk-win.exe": {
+      "url": "https://downloads.snyk.io/cli/v1.1307.2/snyk-win.exe",
+      "sha256": "1f20b097c6689ba9517d9b247c4e3130f40c6d6b29ac02ceb77532ee16e3890a  snyk-win.exe",
+      "sha256Url": "https://downloads.snyk.io/cli/v1.1307.2/snyk-win.exe.sha256"
+    }
+  },
+  "schemaVersion": 1
+}

@@ -1,0 +1,6 @@
+#!/bin/sh
+set -eu
+rote_setup_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+export ROTE_HOME="$rote_setup_dir/.runtime"
+export PATH="$rote_setup_dir/bin:$ROTE_HOME/bin:$PATH"
+exec "$rote_setup_dir/bin/rote" "$@"

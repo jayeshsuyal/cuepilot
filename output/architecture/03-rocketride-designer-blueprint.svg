@@ -1,0 +1,97 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!DOCTYPE svg
+  PUBLIC '-//W3C//DTD SVG 1.0//EN'
+  'http://www.w3.org/TR/2001/REC-SVG-20010904/DTD/svg10.dtd'>
+<svg width="1600" height="1000" preserveAspectRatio="xMinYMin meet" viewBox="0 0 1600 1000" xmlns="http://www.w3.org/2000/svg" version="1.0" fill-rule="evenodd" xmlns:xlink="http://www.w3.org/1999/xlink">
+	<title>...</title>
+	<desc>...</desc>
+	<clipPath id="clip">
+		<rect x="0" y="0" width="1600" height="1000"/>
+	</clipPath>
+	<g id="group" transform="scale(1,-1) translate(0,-1000)" style="clip-path: url(#clip)">
+		<g transform="">
+			<rect x="0" y="0" width="1600" height="1000" style="stroke: none; stroke-linecap: butt; stroke-width: 1; fill: rgb(96%,97%,98%); fill-rule: evenodd;"/>
+			<rect x="56" y="911" width="12" height="43" rx="3" ry="3" style="stroke: none; stroke-linecap: butt; stroke-width: 1; fill: rgb(12%,41%,86%); fill-rule: evenodd;"/>
+			<text x="84" y="923.0" style="font-family: Helvetica-Bold; font-size: 40px;fill: rgb(7%,14%,22%); stroke:none;" transform="translate(0,1846) scale(1,-1)">DOCK</text>
+			<text x="1296.48" y="933.4" style="font-family: Helvetica; font-size: 17px;fill: rgb(32%,39%,47%); stroke:none;" transform="translate(0,1866) scale(1,-1)">ARCHITECTURE / 11 SEP 2026</text>
+			<text x="56" y="847.6" style="font-family: Helvetica-Bold; font-size: 43px;fill: rgb(7%,14%,22%); stroke:none;" transform="translate(0,1695) scale(1,-1)">The RocketRide Designer view</text>
+			<text x="56" y="811.4" style="font-family: Helvetica; font-size: 22px;fill: rgb(32%,39%,47%); stroke:none;" transform="translate(0,1622) scale(1,-1)">A concrete node blueprint based on the installed staging catalog. Full Dock pipeline validation is still required.</text>
+			<path d="M 56,60 L 1544,60 Z" style="stroke: rgb(71%,77%,83%); stroke-linecap: butt; stroke-width: 1;"/>
+			<text x="56" y="29.4" style="font-family: Helvetica; font-size: 17px;fill: rgb(32%,39%,47%); stroke:none;" transform="translate(0,58) scale(1,-1)">TARGET DESIGN  |  One supplier. Two repairs. Three proof runs.</text>
+			<text x="1492.014" y="29.4" style="font-family: Helvetica; font-size: 17px;fill: rgb(32%,39%,47%); stroke:none;" transform="translate(0,58) scale(1,-1)">03 / 06</text>
+			<text x="56" y="736.4" style="font-family: Helvetica-Bold; font-size: 17px;fill: rgb(32%,39%,47%); stroke:none;" transform="translate(0,1472) scale(1,-1)">SEPARATE TRACED OPERATIONS</text>
+			<text x="56" y="696.4" style="font-family: Helvetica; font-size: 22px;fill: rgb(32%,39%,47%); stroke:none;" transform="translate(0,1392) scale(1,-1)">1 Extract and store evidence</text>
+			<text x="56" y="665.4" style="font-family: Helvetica; font-size: 22px;fill: rgb(32%,39%,47%); stroke:none;" transform="translate(0,1330) scale(1,-1)">2 Recall rules and recipes</text>
+			<text x="56" y="634.4" style="font-family: Helvetica; font-size: 22px;fill: rgb(32%,39%,47%); stroke:none;" transform="translate(0,1268) scale(1,-1)">3 Query the current batch</text>
+			<rect x="628" y="618" width="344" height="143" rx="14" ry="14" style="stroke: rgb(71%,77%,83%); stroke-linecap: butt; stroke-width: 1; fill: rgb(100%,100%,100%); fill-rule: evenodd;"/>
+			<rect x="628" y="618" width="6" height="143" rx="3" ry="3" style="stroke: none; stroke-linecap: butt; stroke-width: 1; fill: rgb(7%,14%,22%); fill-rule: evenodd;"/>
+			<text x="650" y="726.2" style="font-family: Helvetica-Bold; font-size: 16px;fill: rgb(7%,14%,22%); stroke:none;" transform="translate(0,1452) scale(1,-1)">TOOL_HTTP_REQUEST</text>
+			<text x="650" y="689.6" style="font-family: Helvetica-Bold; font-size: 28px;fill: rgb(7%,14%,22%); stroke:none;" transform="translate(0,1379) scale(1,-1)">Dock Operations</text>
+			<text x="650" y="654.6" style="font-family: Helvetica; font-size: 18px;fill: rgb(32%,39%,47%); stroke:none;" transform="translate(0,1309) scale(1,-1)">One authenticated bridge.</text>
+			<text x="650" y="629.6" style="font-family: Helvetica; font-size: 18px;fill: rgb(32%,39%,47%); stroke:none;" transform="translate(0,1259) scale(1,-1)">Separate traced operations.</text>
+			<text x="1115" y="736.4" style="font-family: Helvetica-Bold; font-size: 17px;fill: rgb(32%,39%,47%); stroke:none;" transform="translate(0,1472) scale(1,-1)">CONTINUED BY THE SAME AGENT</text>
+			<text x="1115" y="696.4" style="font-family: Helvetica; font-size: 22px;fill: rgb(32%,39%,47%); stroke:none;" transform="translate(0,1392) scale(1,-1)">4 Preview proposed changes</text>
+			<text x="1115" y="665.4" style="font-family: Helvetica; font-size: 22px;fill: rgb(32%,39%,47%); stroke:none;" transform="translate(0,1330) scale(1,-1)">5 Execute or replay</text>
+			<text x="1115" y="634.4" style="font-family: Helvetica; font-size: 22px;fill: rgb(32%,39%,47%); stroke:none;" transform="translate(0,1268) scale(1,-1)">6 Verify the receiving receipt</text>
+			<rect x="56" y="357" width="300" height="150" rx="14" ry="14" style="stroke: rgb(71%,77%,83%); stroke-linecap: butt; stroke-width: 1; fill: rgb(100%,100%,100%); fill-rule: evenodd;"/>
+			<rect x="56" y="357" width="6" height="150" rx="3" ry="3" style="stroke: none; stroke-linecap: butt; stroke-width: 1; fill: rgb(12%,41%,86%); fill-rule: evenodd;"/>
+			<text x="78" y="472.2" style="font-family: Helvetica-Bold; font-size: 16px;fill: rgb(12%,41%,86%); stroke:none;" transform="translate(0,944) scale(1,-1)">WEBHOOK</text>
+			<text x="78" y="435.6" style="font-family: Helvetica-Bold; font-size: 28px;fill: rgb(7%,14%,22%); stroke:none;" transform="translate(0,871) scale(1,-1)">Batch source</text>
+			<text x="78" y="400.6" style="font-family: Helvetica; font-size: 18px;fill: rgb(32%,39%,47%); stroke:none;" transform="translate(0,801) scale(1,-1)">External run request</text>
+			<text x="78" y="375.6" style="font-family: Helvetica; font-size: 18px;fill: rgb(32%,39%,47%); stroke:none;" transform="translate(0,751) scale(1,-1)">on the questions lane.</text>
+			<rect x="590" y="342" width="420" height="180" rx="14" ry="14" style="stroke: rgb(71%,77%,83%); stroke-linecap: butt; stroke-width: 1; fill: rgb(100%,100%,100%); fill-rule: evenodd;"/>
+			<rect x="590" y="342" width="6" height="180" rx="3" ry="3" style="stroke: none; stroke-linecap: butt; stroke-width: 1; fill: rgb(77%,35%,8%); fill-rule: evenodd;"/>
+			<text x="612" y="487.2" style="font-family: Helvetica-Bold; font-size: 16px;fill: rgb(77%,35%,8%); stroke:none;" transform="translate(0,974) scale(1,-1)">AGENT_ROCKETRIDE</text>
+			<text x="612" y="450.6" style="font-family: Helvetica-Bold; font-size: 28px;fill: rgb(7%,14%,22%); stroke:none;" transform="translate(0,901) scale(1,-1)">Dock agent</text>
+			<text x="612" y="414.8" style="font-family: Helvetica; font-size: 19px;fill: rgb(32%,39%,47%); stroke:none;" transform="translate(0,829) scale(1,-1)">Owns the decision and tool sequence.</text>
+			<text x="612" y="388.8" style="font-family: Helvetica; font-size: 19px;fill: rgb(32%,39%,47%); stroke:none;" transform="translate(0,777) scale(1,-1)">One LLM + one internal memory.</text>
+			<text x="612" y="362.8" style="font-family: Helvetica; font-size: 19px;fill: rgb(32%,39%,47%); stroke:none;" transform="translate(0,725) scale(1,-1)">Supplier knowledge lives in HydraDB.</text>
+			<rect x="1244" y="357" width="300" height="150" rx="14" ry="14" style="stroke: rgb(71%,77%,83%); stroke-linecap: butt; stroke-width: 1; fill: rgb(100%,100%,100%); fill-rule: evenodd;"/>
+			<rect x="1244" y="357" width="6" height="150" rx="3" ry="3" style="stroke: none; stroke-linecap: butt; stroke-width: 1; fill: rgb(3%,49%,40%); fill-rule: evenodd;"/>
+			<text x="1266" y="472.2" style="font-family: Helvetica-Bold; font-size: 16px;fill: rgb(3%,49%,40%); stroke:none;" transform="translate(0,944) scale(1,-1)">RESPONSE_ANSWERS</text>
+			<text x="1266" y="435.6" style="font-family: Helvetica-Bold; font-size: 28px;fill: rgb(7%,14%,22%); stroke:none;" transform="translate(0,871) scale(1,-1)">Run answer</text>
+			<text x="1266" y="400.6" style="font-family: Helvetica; font-size: 18px;fill: rgb(32%,39%,47%); stroke:none;" transform="translate(0,801) scale(1,-1)">Answer lane to the UI.</text>
+			<text x="1266" y="375.6" style="font-family: Helvetica; font-size: 18px;fill: rgb(32%,39%,47%); stroke:none;" transform="translate(0,751) scale(1,-1)">Run JSON from the adapter.</text>
+			<path d="M 356,430 L 590,430 Z" style="stroke: rgb(12%,41%,86%); stroke-linecap: butt; stroke-width: 2.2;"/>
+			<polygon points="590 430, 580.1434 425.1166, 580.1434 434.8834" style="stroke: none; stroke-linecap: butt; stroke-width: 1; fill: rgb(12%,41%,86%); fill-rule: evenodd;"/>
+			<rect x="425.48" y="436" width="93.03999999999996" height="27" rx="4" ry="4" style="stroke: none; stroke-linecap: butt; stroke-width: 1; fill: rgb(96%,97%,98%); fill-rule: evenodd;"/>
+			<text x="433.48" y="445.6" style="font-family: Helvetica; font-size: 18px;fill: rgb(12%,41%,86%); stroke:none;" transform="translate(0,891) scale(1,-1)">questions</text>
+			<path d="M 1010,430 L 1244,430 Z" style="stroke: rgb(3%,49%,40%); stroke-linecap: butt; stroke-width: 2.2;"/>
+			<polygon points="1244 430, 1234.143 425.1166, 1234.143 434.8834" style="stroke: none; stroke-linecap: butt; stroke-width: 1; fill: rgb(3%,49%,40%); fill-rule: evenodd;"/>
+			<rect x="1085.493" y="436" width="83.0139999999999" height="27" rx="4" ry="4" style="stroke: none; stroke-linecap: butt; stroke-width: 1; fill: rgb(96%,97%,98%); fill-rule: evenodd;"/>
+			<text x="1093.493" y="445.6" style="font-family: Helvetica; font-size: 18px;fill: rgb(3%,49%,40%); stroke:none;" transform="translate(0,891) scale(1,-1)">answers</text>
+			<path d="M 800,618 L 800,522 Z" style="stroke: rgb(7%,14%,22%); stroke-linecap: butt; stroke-width: 2.2; stroke-dasharray: 7, 6;"/>
+			<polygon points="800 522, 795.1166 531.8566, 804.8834 531.8566" style="stroke: none; stroke-linecap: butt; stroke-width: 1; fill: rgb(7%,14%,22%); fill-rule: evenodd;"/>
+			<rect x="180" y="99" width="315" height="129" rx="14" ry="14" style="stroke: rgb(71%,77%,83%); stroke-linecap: butt; stroke-width: 1; fill: rgb(100%,100%,100%); fill-rule: evenodd;"/>
+			<rect x="180" y="99" width="6" height="129" rx="3" ry="3" style="stroke: none; stroke-linecap: butt; stroke-width: 1; fill: rgb(77%,35%,8%); fill-rule: evenodd;"/>
+			<text x="202" y="193.2" style="font-family: Helvetica-Bold; font-size: 16px;fill: rgb(77%,35%,8%); stroke:none;" transform="translate(0,386) scale(1,-1)">LLM_OPENAI</text>
+			<text x="202" y="156.6" style="font-family: Helvetica-Bold; font-size: 28px;fill: rgb(7%,14%,22%); stroke:none;" transform="translate(0,313) scale(1,-1)">Agent LLM</text>
+			<text x="202" y="120.0" style="font-family: Helvetica; font-size: 20px;fill: rgb(32%,39%,47%); stroke:none;" transform="translate(0,240) scale(1,-1)">Planner for novel decisions.</text>
+			<rect x="642" y="99" width="316" height="129" rx="14" ry="14" style="stroke: rgb(71%,77%,83%); stroke-linecap: butt; stroke-width: 1; fill: rgb(100%,100%,100%); fill-rule: evenodd;"/>
+			<rect x="642" y="99" width="6" height="129" rx="3" ry="3" style="stroke: none; stroke-linecap: butt; stroke-width: 1; fill: rgb(32%,39%,47%); fill-rule: evenodd;"/>
+			<text x="664" y="193.2" style="font-family: Helvetica-Bold; font-size: 16px;fill: rgb(32%,39%,47%); stroke:none;" transform="translate(0,386) scale(1,-1)">MEMORY_INTERNAL</text>
+			<text x="664" y="156.6" style="font-family: Helvetica-Bold; font-size: 28px;fill: rgb(7%,14%,22%); stroke:none;" transform="translate(0,313) scale(1,-1)">Run scratchpad</text>
+			<text x="664" y="120.0" style="font-family: Helvetica; font-size: 20px;fill: rgb(32%,39%,47%); stroke:none;" transform="translate(0,240) scale(1,-1)">Required session memory.</text>
+			<rect x="1214" y="96" width="330" height="180" rx="14" ry="14" style="stroke: rgb(71%,77%,83%); stroke-linecap: butt; stroke-width: 1; fill: rgb(100%,100%,100%); fill-rule: evenodd;"/>
+			<rect x="1214" y="96" width="6" height="180" rx="3" ry="3" style="stroke: none; stroke-linecap: butt; stroke-width: 1; fill: rgb(3%,49%,40%); fill-rule: evenodd;"/>
+			<text x="1236" y="241.2" style="font-family: Helvetica-Bold; font-size: 16px;fill: rgb(3%,49%,40%); stroke:none;" transform="translate(0,482) scale(1,-1)">BRIDGE - NOT A NATIVE NODE</text>
+			<text x="1236" y="204.6" style="font-family: Helvetica-Bold; font-size: 28px;fill: rgb(7%,14%,22%); stroke:none;" transform="translate(0,409) scale(1,-1)">Local adapters</text>
+			<text x="1236" y="169.6" style="font-family: Helvetica; font-size: 18px;fill: rgb(32%,39%,47%); stroke:none;" transform="translate(0,339) scale(1,-1)">Cognee / HydraDB / Hotdata</text>
+			<text x="1236" y="144.6" style="font-family: Helvetica; font-size: 18px;fill: rgb(32%,39%,47%); stroke:none;" transform="translate(0,289) scale(1,-1)">Rote / guarded receiving API</text>
+			<text x="1236" y="119.6" style="font-family: Helvetica; font-size: 18px;fill: rgb(32%,39%,47%); stroke:none;" transform="translate(0,239) scale(1,-1)">Approval + version + retry guards.</text>
+			<path d="M 338,228 L 338,295 Z" style="stroke: rgb(77%,35%,8%); stroke-linecap: butt; stroke-width: 2.2; stroke-dasharray: 7, 6;"/>
+			<path d="M 338,295 L 685,295 Z" style="stroke: rgb(77%,35%,8%); stroke-linecap: butt; stroke-width: 2.2; stroke-dasharray: 7, 6;"/>
+			<path d="M 685,295 L 685,342 Z" style="stroke: rgb(77%,35%,8%); stroke-linecap: butt; stroke-width: 2.2; stroke-dasharray: 7, 6;"/>
+			<polygon points="685 342, 689.8834 332.1434, 680.1166 332.1434" style="stroke: none; stroke-linecap: butt; stroke-width: 1; fill: rgb(77%,35%,8%); fill-rule: evenodd;"/>
+			<path d="M 800,228 L 800,342 Z" style="stroke: rgb(32%,39%,47%); stroke-linecap: butt; stroke-width: 2.2; stroke-dasharray: 7, 6;"/>
+			<polygon points="800 342, 804.8834 332.1434, 795.1166 332.1434" style="stroke: none; stroke-linecap: butt; stroke-width: 1; fill: rgb(32%,39%,47%); fill-rule: evenodd;"/>
+			<path d="M 972,618 L 1570,618 Z" style="stroke: rgb(7%,14%,22%); stroke-linecap: butt; stroke-width: 2.2; stroke-dasharray: 7, 6;"/>
+			<path d="M 1570,618 L 1570,300 Z" style="stroke: rgb(7%,14%,22%); stroke-linecap: butt; stroke-width: 2.2; stroke-dasharray: 7, 6;"/>
+			<path d="M 1570,300 L 1379,300 Z" style="stroke: rgb(7%,14%,22%); stroke-linecap: butt; stroke-width: 2.2; stroke-dasharray: 7, 6;"/>
+			<path d="M 1379,300 L 1379,276 Z" style="stroke: rgb(7%,14%,22%); stroke-linecap: butt; stroke-width: 2.2; stroke-dasharray: 7, 6;"/>
+			<polygon points="1379 276, 1374.117 285.8566, 1383.883 285.8566" style="stroke: none; stroke-linecap: butt; stroke-width: 1; fill: rgb(7%,14%,22%); fill-rule: evenodd;"/>
+			<rect x="928.928" y="279" width="292.1440000000001" height="25" rx="4" ry="4" style="stroke: none; stroke-linecap: butt; stroke-width: 1; fill: rgb(96%,97%,98%); fill-rule: evenodd;"/>
+			<text x="936.928" y="288.2" style="font-family: Helvetica; font-size: 16px;fill: rgb(32%,39%,47%); stroke:none;" transform="translate(0,576) scale(1,-1)">Dashed = attachments / bridge request</text>
+		</g>
+	</g>
+</svg>

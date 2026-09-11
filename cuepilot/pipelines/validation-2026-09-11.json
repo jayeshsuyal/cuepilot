@@ -1,0 +1,17 @@
+{
+  "date": "2026-09-11",
+  "target": "RocketRide staging",
+  "pipeline": "cuepilot.pipe",
+  "authenticationPassed": true,
+  "localGuardChecksPassed": true,
+  "validation": { "passed": true, "errors": 0, "warnings": 0 },
+  "modelProfileVerified": true,
+  "positiveComputeCredit": true,
+  "taskStarted": false,
+  "modelCalled": false,
+  "executionBlockersAtValidation": [
+    "PUBLIC_HTTPS_BRIDGE_REQUIRED",
+    "BRIDGE_TOKEN_REQUIRED_MIN_24_CHARS",
+    "OPENAI_MODEL_KEY_REQUIRED"
+  ]
+}

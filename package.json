@@ -1,0 +1,31 @@
+{
+  "name": "compound-agents-hackathon",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "packageManager": "pnpm@10.33.0",
+  "scripts": {
+    "dev:cuepilot": "sponsor-setup/memory/.venv/bin/python -m cuepilot.api",
+    "test:cuepilot": "sponsor-setup/memory/.venv/bin/python -m unittest discover -s cuepilot/tests -v",
+    "check:cuepilot:pipeline": "node cuepilot/integrations/rocketride.mjs --validate-only",
+    "check:rocketride": "node --env-file-if-exists=.env sponsor-setup/rocketride/check.mjs",
+    "sponsors:check": "python3 sponsor-setup/doctor.py",
+    "sponsors:check:live": "python3 sponsor-setup/doctor.py --live",
+    "check:cognee": "bash sponsor-setup/memory/cognee_demo.sh",
+    "check:cognee:cloud": "sponsor-setup/memory/.venv/bin/python sponsor-setup/memory/cognee_cloud_ingest.py",
+    "check:hydradb": "sponsor-setup/memory/.venv/bin/python sponsor-setup/memory/hydradb_smoke.py",
+    "check:hotdata": "bash sponsor-setup/hotdata/smoke.sh",
+    "check:rote": "python3 sponsor-setup/rote/smoke.py",
+    "login:rocketride": "rocketride init --uri https://staging.rocketride.ai",
+    "login:hotdata": "sponsor-setup/hotdata/bin/hotdata auth login",
+    "check:rocketride:pipeline": "node --env-file=.env sponsor-setup/rocketride/smoke.mjs",
+    "security:code": "python3 sponsor-setup/snyk/scan.py code",
+    "security:node": "python3 sponsor-setup/snyk/scan.py node",
+    "security:python": "python3 sponsor-setup/snyk/scan.py python",
+    "security:scan": "python3 sponsor-setup/snyk/scan.py all",
+    "login:snyk": "sponsor-setup/snyk/bin/snyk auth"
+  },
+  "dependencies": {
+    "rocketride": "file:sponsor-setup/rocketride/vendor/rocketride-client.tgz"
+  }
+}

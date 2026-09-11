@@ -1,0 +1,4 @@
+id,category,status,minutes_to_resolve
+1,billing,resolved,12
+2,access,resolved,6
+3,billing,open,0

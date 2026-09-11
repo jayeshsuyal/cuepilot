@@ -1,0 +1,25 @@
+{
+  "verified_on": "2026-09-11",
+  "python": "3.12.12",
+  "cognee": {
+    "version": "1.5.4",
+    "installed": true,
+    "keyless_graph_ingest_and_recall": "passed",
+    "demo_nodes": 47,
+    "demo_edges": 86,
+    "raw_text_extraction": "needs configured LLM and embedding provider"
+  },
+  "hydradb": {
+    "installed": true,
+    "container": "hackathon-hydradb",
+    "docker_context": "colima-hackathon",
+    "bolt_url": "bolt://127.0.0.1:7687",
+    "http_url": "http://127.0.0.1:8443",
+    "auth_token_file": ".hydradb/auth-token",
+    "image_digest": "sha256:db78309a233be54662db29744047e985a39b51c45a270d1a1f47c31a62cdb709",
+    "bolt_write_read_and_http_read": "passed",
+    "readyz": "passed"
+  },
+  "dependency_check": "passed",
+  "cognee_to_hydradb_application_integration": "not implemented by setup"
+}

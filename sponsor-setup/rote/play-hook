@@ -1,0 +1,7 @@
+#!/bin/sh
+# Environment wrapper for the official Play-only Codex prompt hook.
+set -eu
+rote_setup_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+export ROTE_HOME="$rote_setup_dir/.runtime"
+export PATH="$rote_setup_dir/.play-venv/bin:$rote_setup_dir:$HOME/.local/bin:$PATH"
+exec "$HOME/.local/share/modiqo/play/skill/scripts/bin/play-intercept" "$@"

@@ -1,0 +1,8 @@
+.runtime/
+.play-venv/
+.play-bootstrap/
+__pycache__/
+bin/
+downloads/
+reports/
+skills/

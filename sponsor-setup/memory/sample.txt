@@ -1,0 +1,4 @@
+This is synthetic setup data for the hackathon, not a real customer record.
+The Atlas support team owns ticket DEMO-101.
+Ticket DEMO-101 concerns an expired API token.
+The successful resolution was to issue a replacement token and retry the request.

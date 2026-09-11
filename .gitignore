@@ -1,0 +1,27 @@
+.env
+.env.*
+!.env.example
+node_modules/
+.venv/
+__pycache__/
+*.pyc
+.DS_Store
+sponsor-setup/**/bin/
+sponsor-setup/**/.cache/
+sponsor-setup/**/data/
+sponsor-setup/**/logs/
+sponsor-setup/**/downloads/
+sponsor-setup/**/.state/
+.rocketride/
+!sponsor-setup/hotdata/data/
+!sponsor-setup/hotdata/data/tickets.csv
+
+# CuePilot private runtime and local service credentials
+cuepilot/.env
+cuepilot/.runtime/
+cuepilot/plays/.runtime/
+
+# Machine-specific editor integration and rendering scratch files
+.codex/
+tmp/
+sponsor-setup/snyk/codex-mcp.toml

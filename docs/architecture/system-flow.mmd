@@ -1,0 +1,25 @@
+flowchart TD
+  subgraph RUNTIME["RocketRide orchestrates separate bounded tool calls"]
+    INPUT["Immutable CSV + supplier note<br/>One effective date per batch"] --> LOOKUP{"Receipt already exists<br/>for this idempotency key?"}
+    LOOKUP -->|Yes| RECEIPT["Return the same durable receipt<br/>No duplicate write"]
+    LOOKUP -->|No| EVIDENCE["Cognee processes new notes<br/>Hydra recalls approved rules<br/>hotdata queries fresh batch and catalog"]
+    EVIDENCE --> MATCH{"Recipe preconditions match?"}
+    MATCH -->|No recipe| LEARN["Validate facts + approve plan<br/>Execute two allowed repairs"]
+    MATCH -->|Match| REPLAY["Rote replays with new batch parameters"]
+    MATCH -->|Changed or ambiguous| BLOCK["BLOCKED<br/>Zero new rows"]
+    LEARN --> GUARD["Validate outputs<br/>Within one receiving transaction:<br/>return existing receipt first;<br/>otherwise check catalog version and unique retry key"]
+    REPLAY --> GUARD
+    GUARD -->|Confirmed commit| IMPORT["Receiving API returns durable receipt"]
+    GUARD -->|Confirmed rejection or rollback| BLOCK
+    GUARD -->|Timeout or unknown result| RECONCILE["RECONCILING<br/>Lookup or retry with the same key<br/>Keep unknown status until resolved"]
+    RECONCILE -->|Committed| IMPORT
+    RECONCILE -->|Authoritative rollback or rejection| BLOCK
+    RECONCILE -->|Still unknown| RECONCILE
+    IMPORT --> SAVE["Publish or reuse verified Rote procedure<br/>Write outcome and lineage to HydraDB"]
+  end
+  subgraph BUILD["Development and submission gate - outside the runtime"]
+    SOURCE["Code + dependency changes"] --> SNYK["Snyk scans"]
+    SNYK -->|Findings| FIX["Fix and rescan<br/>Keep unresolved findings visible"]
+    FIX --> SNYK
+    SNYK -->|Recorded results| EVIDENCEPACK["Submission security evidence"]
+  end
