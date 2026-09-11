@@ -10,7 +10,7 @@ local configuration with owner-only permissions; this document contains no keys.
 | hotdata.dev | Actual synthetic data loading and fresh readiness queries passed, including a missing-presentation case. Load idempotency now binds the destination and full payload so API restarts can publish the same snapshot into a fresh database. |
 | RocketRide | Actual live preparation, approved Rote execution and verification passed through the authenticated bridge. The existing funded staging login is selected; the newly supplied key authenticated but had no available compute credit. |
 | Modiqo / Rote | Actual live Maya learning, Ravi replay of the same package with new receipts, and Alex interruption passed. Existing CLI login works. |
-| Snyk | Existing CLI login completes source scans; the latest source scan passed with zero findings at 22:36 UTC. The supplied token returned HTTP 401, so it is not used for scanning. Six previously reported dependency advisories remain open. |
+| Snyk | Existing CLI login completes source scans; the latest source scan passed with zero findings at 23:40 UTC. The supplied token returned HTTP 401, so it is not used for scanning. Six previously reported dependency advisories remain open. |
 | Model provider | The supplied model key works. The default supported GPT-4o profile completed the live flows. |
 
 `COGNEE_URL` is normalized privately to the app's `COGNEE_SERVICE_URL`.
@@ -34,3 +34,12 @@ Other private evidence is under `cuepilot/.runtime/` and
 `sponsor-setup/snyk/reports/`. The temporary tunnel and local services must remain
 running for the configured demo. Generated plays and credentials are not part of
 a fresh checkout; a new machine must configure services and learn its own play.
+
+Follow-up bug sweep: read-only RocketRide staging/bridge validation, Hydra recipe
+traversal, Cognee existing-graph proof, and Hotdata workspace access passed at
+23:30–23:31 UTC. At 23:40 UTC, a prepared Maya plan executed through the patched
+desk/API with three receipts and verified traces for all five sponsors. See
+[the bug-sweep report](bug-sweep-2026-09-11.md) for the earlier reproduced approval
+race, its fix, and closing verification. A fresh Ravi browser run also passed
+at 23:42 UTC, with execution starting after verified preparation and three new
+receipts.

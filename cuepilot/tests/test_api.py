@@ -146,6 +146,31 @@ class CuePilotTests(unittest.TestCase):
         response = self.client.post('/api/v1/runs',content=b'x'*32769,headers=self.operator)
         self.assertEqual(response.status_code,413)
 
+    def test_rejected_practice_creation_leaves_no_queued_run_or_stage_change(self):
+        for group, item, field, unavailable, ready, error in (
+            ('assets', 'slides-maya', 'status', 'missing', 'ready', 'presentation_unavailable'),
+            ('speakers', 'maya', 'ready', False, True, 'speaker_unavailable'),
+        ):
+            with self.subTest(readiness=group):
+                before_runs = self.client.get('/api/v1/runs').json()
+                before_stage = self.client.get('/api/v1/stage').json()
+                revision = self.client.get('/api/v1/show').json()['revision']
+                changed = self.client.patch(f'/api/v1/{group}/{item}',
+                    json={field: unavailable, 'expectedRevision': revision}, headers=self.operator)
+                self.assertEqual(changed.status_code, 200)
+                response = self.client.post('/api/v1/runs',
+                    json={'speakerId': 'maya', 'executionMode': 'practice'}, headers=self.operator)
+                self.assertEqual(response.status_code, 409)
+                self.assertEqual(response.json()['detail']['code'], error)
+                self.assertEqual(self.client.get('/api/v1/runs').json(), before_runs)
+                self.assertEqual(self.client.get('/api/v1/stage').json(), before_stage)
+                restored = self.client.patch(f'/api/v1/{group}/{item}',
+                    json={field: ready, 'expectedRevision': changed.json()['revision']}, headers=self.operator)
+                self.assertEqual(restored.status_code, 200)
+                recovered = self.create(approve=False)
+                self.assertEqual(recovered['status'], 'needs_approval')
+                self.assertIsNotNone(recovered['plan'])
+
     def test_cleanup_failure_cannot_erase_completed_cue_receipts(self):
         run = self.create()
         for step in range(3):

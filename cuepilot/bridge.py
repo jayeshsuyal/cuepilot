@@ -76,13 +76,14 @@ def receipt_projection(receipts, run_id):
     if not isinstance(receipts, list) or len(receipts) > 3:
         raise BridgeError("upstream_invalid_response")
     selected = []
+    receipt_ids = set()
     previous_revision = 0
     for expected_step, receipt in enumerate(receipts):
         if not isinstance(receipt, dict):
             raise BridgeError("upstream_invalid_response")
         step = receipt.get("stepIndex")
         if (receipt.get("ok") is not True
-                or not canonical_uuid(receipt.get("id")) or receipt.get("runId") != run_id
+                or not canonical_uuid(receipt.get("id")) or receipt["id"] in receipt_ids or receipt.get("runId") != run_id
                 or not bounded_integer(step, high=2) or step != expected_step
                 or receipt.get("scene") != ("intro", "presentation", "holding")[step]
                 or not bounded_integer(receipt.get("stageRevision"), low=1)
@@ -92,6 +93,7 @@ def receipt_projection(receipts, run_id):
                 or not TIMESTAMP.fullmatch(receipt["committedAt"])):
             raise BridgeError("upstream_invalid_response")
         previous_revision = receipt["stageRevision"]
+        receipt_ids.add(receipt["id"])
         selected.append({key: receipt[key] for key in
                          ("ok", "id", "runId", "stepIndex", "scene", "stageRevision", "committedAt")})
     return selected

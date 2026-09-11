@@ -6,6 +6,7 @@ import { ClientError, DEFAULT_NOTES, liveCompletion } from "../src/lib/model";
 import type { Evidence, Run } from "../src/lib/model";
 import {
   cueGuidance,
+  preparationVerified,
   readRunMode,
   saveRunMode,
   unfinishedRun,
@@ -107,7 +108,10 @@ test("completed Practice explains holding and the next segment without claiming 
 
 test("operator guidance follows approval, failure, retry and live execution states", () => {
   assert.equal(
-    cueGuidance(run({ status: "needs_approval" }), null).title,
+    cueGuidance(
+      run({ status: "needs_approval", traces: [trace("verified", "prepare")] }),
+      null,
+    ).title,
     "Review and approve the plan",
   );
   assert.equal(
@@ -140,6 +144,34 @@ test("operator guidance follows approval, failure, retry and live execution stat
   assert.equal(
     cueGuidance(run({ status: "blocked" }), null, { retry: true }).title,
     "Reconcile the previous cue",
+  );
+});
+
+test("a returned live plan must wait for final preparation evidence before approval", () => {
+  const planned = run({ status: "needs_approval" });
+  assert.equal(preparationVerified(planned), false);
+  assert.equal(
+    cueGuidance(planned, null).title,
+    "Finalizing sponsor preparation",
+  );
+  assert.equal(
+    preparationVerified({ ...planned, traces: [trace("verified")] }),
+    false,
+  );
+  assert.equal(
+    preparationVerified({ ...planned, traces: [trace("verified", "prepare")] }),
+    true,
+  );
+  assert.equal(
+    preparationVerified({
+      ...planned,
+      traces: [trace("verified", "prepare"), trace("blocked", "prepare")],
+    }),
+    false,
+  );
+  assert.equal(
+    preparationVerified({ ...planned, executionMode: "practice" }),
+    true,
   );
 });
 

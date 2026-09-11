@@ -2,7 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { getClient } from "../src/lib/api-client";
 import { ClientError } from "../src/lib/model";
-import { readIntent, sendCue } from "../src/lib/cue-intent";
+import { inspectCueIntent, readIntent, sendCue } from "../src/lib/cue-intent";
 import type { CuePilotClient } from "../src/lib/model";
 const realFetch = globalThis.fetch;
 test("projector reads only current stage and never depends on selected run or history", async () => {
@@ -124,6 +124,28 @@ function store(): Storage {
     },
   };
 }
+test("unreadable cue intent blocks writes without discarding the saved record", () => {
+  const storage = store();
+  storage.setItem("cuepilot.pending-cue.api", "{bad-json");
+  const result = inspectCueIntent("api", () => storage);
+  assert.equal(result.intent, null);
+  assert.match(result.error, /Operator actions are paused/);
+  assert.equal(storage.getItem("cuepilot.pending-cue.api"), "{bad-json");
+  assert.deepEqual(
+    inspectCueIntent("fixture", () => storage),
+    {
+      intent: null,
+      error: "",
+    },
+  );
+});
+test("denied browser storage is reported without crashing or assuming an empty intent", () => {
+  const result = inspectCueIntent("api", () => {
+    throw new Error("Storage access denied");
+  });
+  assert.equal(result.intent, null);
+  assert.match(result.error, /Saved cue state could not be read/);
+});
 test("frozen routes, fields, returned hash, and server-side authentication boundary", async () => {
   const calls: {
     url: string;

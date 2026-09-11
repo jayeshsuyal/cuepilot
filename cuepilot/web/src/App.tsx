@@ -26,6 +26,7 @@ import { useDesk } from "./lib/use-desk";
 import {
   cueGuidance,
   cueLabels,
+  preparationVerified,
   readRunMode,
   saveRunMode,
   unfinishedRun,
@@ -95,6 +96,7 @@ function Desk({
     actionError,
     notice,
     retry,
+    intentError,
   } = desk;
   const [selectedId, setSelectedId] = useState("");
   const [notes, setNotes] = useState(DEFAULT_NOTES);
@@ -102,9 +104,14 @@ function Desk({
   const [mode, setMode] = useState<RunMode>(() => readRunMode(source));
   const changeMode = (next: RunMode) => setMode(saveRunMode(source, next));
   const [cancelling, setCancelling] = useState(false);
-  const [executeSent, setExecuteSent] = useState<string | null>(() =>
-    sessionStorage.getItem("cuepilot.execute-requested"),
-  );
+  const [executeSent, setExecuteSent] = useState<string | null>(() => {
+    try {
+      return sessionStorage.getItem("cuepilot.execute-requested");
+    } catch {
+      // The cue-state guard keeps writes disabled if storage cannot be read.
+      return null;
+    }
+  });
   const show = snapshot?.show;
   const run = snapshot?.run;
   useEffect(() => {
@@ -125,8 +132,10 @@ function Desk({
   const runSpeaker = show?.speakers.find((s) => s.id === run?.speakerId);
   const nextCue = plan?.cues.find((c) => c.index === run?.nextStep);
   const stalePlan = Boolean(
-    plan && show && plan.showRevision !== show.revision,
+    plan && show && unfinishedRun(run) && plan.showRevision !== show.revision,
   );
+  const preparing =
+    run?.status === "needs_approval" && !preparationVerified(run);
   const pendingRun =
     desk.runs.find(unfinishedRun) ?? (unfinishedRun(run) ? run : null);
   const completion = liveCompletion(run);
@@ -135,9 +144,10 @@ function Desk({
   const canCancel = Boolean(
     run && !["completed", "blocked", "failed"].includes(run.status),
   );
-  const disabled = busy || !connected;
+  const disabled = busy || !connected || !!intentError;
   const approved = Boolean(run && ["approved", "running"].includes(run.status));
-  const canApprove = run?.status === "needs_approval" && plan && !stalePlan;
+  const canApprove =
+    run?.status === "needs_approval" && plan && !stalePlan && !preparing;
   const canAdvance = Boolean(
     run?.executionMode === "practice" && approved && nextCue && !stalePlan,
   );
@@ -145,6 +155,7 @@ function Desk({
     run?.executionMode === "live" &&
     run.status === "approved" &&
     plan?.origin === "sponsor" &&
+    preparationVerified(run) &&
     !stalePlan &&
     executeSent !== run.id;
   const guidance = cueGuidance(run, stage, {
@@ -172,15 +183,26 @@ function Desk({
     );
   const execute = () => {
     if (!run) return;
-    setExecuteSent(run.id);
-    sessionStorage.setItem("cuepilot.execute-requested", run.id);
     void desk.act(async () => {
+      try {
+        sessionStorage.setItem("cuepilot.execute-requested", run.id);
+      } catch {
+        throw new ClientError(
+          "Browser storage is unavailable. No execution request was sent. Restore storage before retrying.",
+          "EXECUTION_STORAGE",
+        );
+      }
+      setExecuteSent(run.id);
       try {
         return await client.execute(run.id);
       } catch (error) {
         if (!(error instanceof ClientError && error.uncertain)) {
           setExecuteSent(null);
-          sessionStorage.removeItem("cuepilot.execute-requested");
+          try {
+            sessionStorage.removeItem("cuepilot.execute-requested");
+          } catch {
+            // Preserve the original rejection if storage cleanup is denied.
+          }
         }
         throw error;
       }
@@ -296,6 +318,15 @@ function Desk({
             >
               <RefreshCw size={14} /> Reconnect
             </button>
+          </div>
+        )}
+        {intentError && (
+          <div className="callout error" role="alert">
+            <TriangleAlert size={18} />
+            <div>
+              <strong>Saved cue needs review</strong>
+              <p>{intentError}</p>
+            </div>
           </div>
         )}
         <div className="desk-grid">
@@ -523,11 +554,13 @@ function Desk({
                 <span
                   className={`status-chip status-${liveCuesCompleted && !completion.fullyVerified ? "running" : (run?.status ?? "idle")}`}
                 >
-                  {liveCuesCompleted
-                    ? completion.fullyVerified
-                      ? "live verified"
-                      : "cues completed"
-                    : (run?.status.replaceAll("_", " ") ?? "No run")}
+                  {preparing
+                    ? "Finalizing plan"
+                    : liveCuesCompleted
+                      ? completion.fullyVerified
+                        ? "live verified"
+                        : "cues completed"
+                      : (run?.status.replaceAll("_", " ") ?? "No run")}
                 </span>
               </div>
               <div className="plan-content">

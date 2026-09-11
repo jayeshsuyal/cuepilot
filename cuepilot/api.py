@@ -182,10 +182,12 @@ class Store:
                    "plan": None, "nextStep": 0, "receipts": [], "traces": [], "reason": None,
                    "createdAt": now(), "updatedAt": now()}
             db.execute("INSERT INTO runs VALUES (?,?)", (run["id"], json.dumps(run)))
-        if execution_mode == "practice":
-            self.add_trace(run["id"], {"provider": "local", "status": "fixture", "operation": "prepare",
-                                     "evidence": {"template": TEMPLATE}, "reason": "Local UI rehearsal; sponsor pipeline has not executed."})
-            return self.plan(run["id"])
+            if execution_mode == "practice":
+                run["traces"].append({"provider": "local", "status": "fixture", "operation": "prepare",
+                                      "evidence": {"template": TEMPLATE}, "reason": "Local UI rehearsal; sponsor pipeline has not executed."})
+                # Creation and local planning commit together, so rejected readiness
+                # cannot leave a queued run that was never returned to the operator.
+                return self._plan(db, run)
         return run
 
     def add_trace(self, run_id, result, memory_operation=None):
@@ -229,6 +231,8 @@ class Store:
             expected = "queued" if phase == "prepare" else "approved"
             if run["executionMode"] != "live" or run["status"] != expected:
                 raise DomainError("orchestration_not_expected", "This run is not ready for that orchestration phase.")
+            if phase == "execute":
+                self.require_prepared(run)
             jobs = run.setdefault("orchestration", {})
             if phase in jobs:
                 raise DomainError("orchestration_already_started", "This phase has already been dispatched. Inspect its run before retrying.")
@@ -269,6 +273,7 @@ class Store:
             if key in ("execute", "validate-execute"):
                 if run["status"] != "approved" or not run["plan"]:
                     raise DomainError("approved_plan_required", "This operation requires an approved plan.")
+                self.require_prepared(run)
                 show = self.state(db, "show")
                 self.current_rule(db, run)
                 self.ready(show, run["speakerId"])
@@ -313,26 +318,29 @@ class Store:
     def plan(self, run_id):
         with self.db() as db:
             run = self.read_run(db, run_id)
-            if run["status"] not in ("queued", "needs_approval"):
-                raise DomainError("plan_frozen", "Create a new run to revise an approved plan.")
-            show = self.state(db, "show")
-            self.ready(show, run["speakerId"])
-            if run["executionMode"] == "live":
-                latest = {r["provider"]: r["status"] for r in run["traces"]}
-                verified = {provider for provider, status in latest.items() if status == "verified"}
-                if not {"cognee", "hydradb", "hotdata"}.issubset(verified) or not run.get("memoryProof"):
-                    raise DomainError("evidence_required", "Live planning needs Cognee-derived cue rules, Hydra provenance and fresh Hotdata checks.")
-                self.current_rule(db, run)
-                if run.get("validatedShowRevision") != show["revision"]:
-                    raise DomainError("fresh_validation_required", "Show state changed after the Hotdata query. Validate it again.")
-            plan = {"id": str(uuid4()), "recipeId": run["memoryProof"]["recipe_id"] if run["executionMode"] == "live" else TEMPLATE, "recipeVersion": 1,
-                    "showRevision": show["revision"], "speakerId": run["speakerId"],
-                    "cues": [{"index": i, "scene": scene} for i, scene in enumerate(["intro", "presentation", "holding"])],
-                    "origin": "fixture" if run["executionMode"] == "practice" else "sponsor"}
-            plan["hash"] = digest({"plan": plan, "notes": run["notes"], "runId": run["id"]})
-            run.update(plan=plan, status="needs_approval", reason=None)
-            self.save_run(db, run)
-            return run
+            return self._plan(db, run)
+
+    def _plan(self, db, run):
+        if run["status"] not in ("queued", "needs_approval"):
+            raise DomainError("plan_frozen", "Create a new run to revise an approved plan.")
+        show = self.state(db, "show")
+        self.ready(show, run["speakerId"])
+        if run["executionMode"] == "live":
+            latest = {r["provider"]: r["status"] for r in run["traces"]}
+            verified = {provider for provider, status in latest.items() if status == "verified"}
+            if not {"cognee", "hydradb", "hotdata"}.issubset(verified) or not run.get("memoryProof"):
+                raise DomainError("evidence_required", "Live planning needs Cognee-derived cue rules, Hydra provenance and fresh Hotdata checks.")
+            self.current_rule(db, run)
+            if run.get("validatedShowRevision") != show["revision"]:
+                raise DomainError("fresh_validation_required", "Show state changed after the Hotdata query. Validate it again.")
+        plan = {"id": str(uuid4()), "recipeId": run["memoryProof"]["recipe_id"] if run["executionMode"] == "live" else TEMPLATE, "recipeVersion": 1,
+                "showRevision": show["revision"], "speakerId": run["speakerId"],
+                "cues": [{"index": i, "scene": scene} for i, scene in enumerate(["intro", "presentation", "holding"])],
+                "origin": "fixture" if run["executionMode"] == "practice" else "sponsor"}
+        plan["hash"] = digest({"plan": plan, "notes": run["notes"], "runId": run["id"]})
+        run.update(plan=plan, status="needs_approval", reason=None)
+        self.save_run(db, run)
+        return run
 
     def approve(self, run_id, plan_hash):
         with self.db() as db:
@@ -341,6 +349,7 @@ class Store:
                 raise DomainError("approval_not_expected", "This run has no pending plan to approve.")
             if not hmac.compare_digest(run["plan"]["hash"], plan_hash):
                 raise DomainError("plan_changed", "Approval must match the exact displayed plan.")
+            self.require_prepared(run)
             show = self.state(db, "show")
             self.current_rule(db, run)
             self.ready(show, run["speakerId"])
@@ -349,6 +358,17 @@ class Store:
             run["status"] = "approved"
             self.save_run(db, run)
             return run
+
+    @staticmethod
+    def require_prepared(run):
+        if run["executionMode"] != "live":
+            return
+        prepare = run.get("orchestration", {}).get("prepare", {})
+        trace = next((entry for entry in reversed(run["traces"])
+                      if entry.get("provider") == "rocketride" and entry.get("operation") == "prepare"), None)
+        if prepare.get("status") != "verified" or trace is None or trace.get("status") != "verified":
+            raise DomainError("preparation_not_complete",
+                              "Wait for RocketRide preparation to finish and verify before approving or executing this plan.")
 
     def current_rule(self, db, run):
         if run["executionMode"] == "live" and self.state(db, "rules")["sha256"] != run.get("memoryProof", {}).get("note_sha256"):

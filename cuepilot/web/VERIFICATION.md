@@ -1,6 +1,25 @@
 # Frontend verification — 2026-09-11
 
-## UI regression verification — 23:20 UTC
+## Full bug sweep — follow-up
+
+See [the bug-sweep report](../../docs/bug-sweep-2026-09-11.md) for reproduced
+failures, fixes, closing live evidence and remaining limits. The sweep adds
+storage-error recovery, transactional rejected Practice creation, unique bridge
+receipt checks, and a mandatory completed-preparation guard before live approval
+or execution. Completed history no longer shows stale-plan recovery warnings.
+
+The closing automated suites pass 191 Python, 25 RocketRide and 25 frontend tests.
+Chrome passed 23 actual-API scenarios (11 baseline plus 12 failure/recovery
+checks), with zero unexpected browser errors. Six additional UI-only mocked-read
+checks prove approval/execution stay disabled until final preparation evidence
+and that completed history does not require recovery. These six are not sponsor
+executions. Original failure evidence is retained, including the fresh live
+phase-overlap failure with zero receipts. After the fix, a real fresh Ravi
+create/prepare/approve/execute browser run completed with three receipts and all
+five sponsors verified; canonical timestamps confirm execution started after
+preparation finished. A prepared Maya run also completed after the fix.
+
+## Earlier UI regression verification — 23:20 UTC
 
 The reported holding/revision confusion is addressed by named cue controls,
 explicit completion guidance, a persisted per-source run mode, a saved run

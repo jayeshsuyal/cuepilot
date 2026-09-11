@@ -317,6 +317,13 @@ class BridgeTests(unittest.TestCase):
                 full = receipt_prefix()
                 self.assert_receipts_rejected([full[step] for step in order])
 
+    def test_receipts_reject_duplicate_ids_across_distinct_valid_steps(self):
+        for repeated_step in (1, 2):
+            with self.subTest(repeated_step=repeated_step):
+                receipts = receipt_prefix()
+                receipts[repeated_step]["id"] = receipts[0]["id"]
+                self.assert_receipts_rejected(receipts)
+
     def test_receipts_bind_each_step_to_its_expected_scene(self):
         for step, wrong_scene in enumerate(("holding", "intro", "presentation")):
             with self.subTest(step=step, wrong_scene=wrong_scene):

@@ -55,9 +55,10 @@ class AcceptanceFixture:
                                   bridge_token=self.bridge_token)
         self.store = self.app.state.store
 
-    def staged_live(self, speaker="maya", approve=False):
+    def staged_live(self, speaker="maya", approve=False, finish_prepare=True):
         # Construct queued state without POST /runs launching real RocketRide.
         run = self.store.create_run(speaker, "Introduction, presentation, holding.", "live")
+        self.store.claim_orchestration(run["id"], "prepare")
         for operation, result, proof_operation in (
             ("ingest-memory", memory_result(run["notes"]), "ingest-memory"),
             ("recall-recipe", memory_result(run["notes"], "hydradb"), "recall-recipe"),
@@ -67,6 +68,10 @@ class AcceptanceFixture:
             self.store.add_trace(run["id"], result, proof_operation)
             self.store.finish_operation(run["id"], key, result)
         run = self.store.plan(run["id"])
+        if finish_prepare:
+            self.store.add_trace(run["id"], {"provider": "rocketride", "status": "verified",
+                "operation": "prepare", "reason": None, "evidence": {"testOnly": True}})
+            self.store.finish_orchestration(run["id"], "prepare", "verified")
         if approve:
             run = self.store.approve(run["id"], run["plan"]["hash"])
             key, _ = self.store.claim_operation(run["id"], "validate-show")
@@ -211,6 +216,61 @@ class SecurityAcceptanceTests(AcceptanceFixture, unittest.TestCase):
         self.assertEqual(ingest.await_count, 0, "Approved rule can still trigger a new ingest")
         self.assertTrue(response.status_code == 200 or 400 <= response.status_code < 500,
                         "A completed ingest may return cached evidence or reject the wrong phase")
+
+    def test_live_approval_waits_for_verified_prepare_finalization(self):
+        run = self.staged_live(finish_prepare=False)
+        route = f"/api/v1/runs/{run['id']}/approve"
+        body = {"planHash": run["plan"]["hash"]}
+        before_stage = self.store.get_state("stage")
+        response = self.client.post(route, headers=self.operator, json=body)
+        self.assertEqual(response.status_code, 409, response.text)
+        self.assertEqual(response.json()["detail"]["code"], "preparation_not_complete")
+        self.assertEqual(self.store.get_run(run["id"])["status"], "needs_approval")
+        self.assertEqual(self.store.get_state("stage"), before_stage)
+        # An untracked live plan must not bypass mandatory sponsor preparation.
+        with self.store.db() as db:
+            current = self.store.read_run(db, run["id"])
+            orchestration = current.pop("orchestration")
+            self.store.save_run(db, current)
+        self.assertEqual(self.client.post(route, headers=self.operator, json=body).status_code, 409)
+        with self.store.db() as db:
+            current = self.store.read_run(db, run["id"])
+            current["orchestration"] = orchestration
+            self.store.save_run(db, current)
+        # A finished orchestration without its matching evidence is insufficient.
+        self.store.finish_orchestration(run["id"], "prepare", "verified")
+        self.assertEqual(self.client.post(route, headers=self.operator, json=body).status_code, 409)
+        # Conversely, a trace cannot authorize approval before finalization ends.
+        self.store.finish_orchestration(run["id"], "prepare", "running")
+        self.store.add_trace(run["id"], {"provider": "rocketride", "status": "verified",
+            "operation": "prepare", "reason": None, "evidence": {"testOnly": True}})
+        self.assertEqual(self.client.post(route, headers=self.operator, json=body).status_code, 409)
+        self.store.finish_orchestration(run["id"], "prepare", "verified")
+        response = self.client.post(route, headers=self.operator, json=body)
+        self.assertEqual(response.status_code, 200, response.text)
+        self.assertEqual(response.json()["status"], "approved")
+
+    def test_execute_cannot_overlap_prepare_even_for_a_prematurely_approved_run(self):
+        run = self.staged_live(approve=True)
+        # Model state admitted by the old approval endpoint while prepare was
+        # still finishing, then exercise both public execution entry points.
+        self.store.finish_orchestration(run["id"], "prepare", "running")
+        subprocess = AsyncMock()
+        replay = AsyncMock()
+        with patch("cuepilot.api.asyncio.create_subprocess_exec", subprocess):
+            response = self.client.post(f"/api/v1/runs/{run['id']}/execute", headers=self.operator)
+        self.assertEqual(response.status_code, 409, response.text)
+        self.assertEqual(response.json()["detail"]["code"], "preparation_not_complete")
+        self.assertEqual(subprocess.await_count, 0)
+        with patch("cuepilot.integrations.rote.replay", replay):
+            response = self.tool("execute", run)
+        self.assertEqual(response.status_code, 409, response.text)
+        self.assertEqual(response.json()["detail"]["code"], "preparation_not_complete")
+        self.assertEqual(replay.await_count, 0)
+        current = self.store.get_run(run["id"])
+        self.assertNotIn("execute", current["orchestration"])
+        self.assertNotIn("execute", current["operations"])
+        self.assertEqual(current["receipts"], [])
 
     def test_stale_show_blocks_before_starting_rote(self):
         run = self.staged_live(approve=True)

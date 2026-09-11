@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { getClient } from "./api-client";
-import { readIntent, sendCue } from "./cue-intent";
+import { inspectCueIntent, sendCue } from "./cue-intent";
 import type { ActionResult, RunSummary, Source, Snapshot } from "./model";
 
 export function useDesk(source: Source) {
@@ -13,7 +13,8 @@ export function useDesk(source: Source) {
   const [notice, setNotice] = useState("");
   const [busy, setBusy] = useState(false);
   const [connected, setConnected] = useState(false);
-  const [retry, setRetry] = useState(() => readIntent(sessionStorage, source));
+  const [cueState, setCueState] = useState(() => inspectCueIntent(source));
+  const { intent: retry, error: intentError } = cueState;
   const gate = useRef(false);
   const sourceRef = useRef(source);
   sourceRef.current = source;
@@ -88,7 +89,7 @@ export function useDesk(source: Source) {
     setConnected(false);
     setActionError("");
     setNotice("");
-    setRetry(readIntent(sessionStorage, source));
+    setCueState(inspectCueIntent(source));
     let reading = false;
     const poll = async () => {
       if (reading || gate.current) return;
@@ -107,8 +108,8 @@ export function useDesk(source: Source) {
     };
   }, [refresh]);
 
-  const act = async (fn: () => Promise<ActionResult>) => {
-    if (gate.current) return;
+  const act = async (fn: () => Promise<ActionResult>, readOnly = false) => {
+    if (gate.current || (intentError && !readOnly)) return;
     gate.current = true;
     sequence.current++;
     setBusy(true);
@@ -130,18 +131,18 @@ export function useDesk(source: Source) {
   };
   const advance = () => {
     const run = snapshot?.run;
-    if (!run || gate.current) return;
+    if (!run || gate.current || intentError) return;
     return act(async () => {
       try {
         return await sendCue(client, run.id, run.nextStep, sessionStorage);
       } finally {
-        setRetry(readIntent(sessionStorage, source));
+        setCueState(inspectCueIntent(source));
       }
     });
   };
   const selectRun = (runId: string) => {
     if (gate.current || retry) return;
-    return act(() => client.selectRun(runId));
+    return act(() => client.selectRun(runId), true);
   };
   return {
     client,
@@ -156,6 +157,7 @@ export function useDesk(source: Source) {
     busy,
     connected,
     retry,
+    intentError,
     refresh,
     act,
     advance,

@@ -46,6 +46,19 @@ export function unfinishedRun(
   );
 }
 
+export function preparationVerified(run: Run | null | undefined): boolean {
+  if (!run) return false;
+  if (run.executionMode === "practice") return true;
+  return (
+    run.traces
+      .filter(
+        (entry) =>
+          entry.provider === "rocketride" && entry.operation === "prepare",
+      )
+      .at(-1)?.status === "verified"
+  );
+}
+
 export function cueGuidance(
   run: Run | null | undefined,
   stage: Stage | null | undefined,
@@ -95,6 +108,12 @@ export function cueGuidance(
       title: "Plan needs to be replaced",
       detail:
         "The show configuration changed after planning. Cancel this run, then create and approve a fresh plan.",
+    };
+  if (run.status === "needs_approval" && !preparationVerified(run))
+    return {
+      title: "Finalizing sponsor preparation",
+      detail:
+        "The plan has returned. Waiting for RocketRide to finish verification before approval becomes available.",
     };
   if (run.status === "needs_approval")
     return {

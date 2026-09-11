@@ -17,8 +17,9 @@ idle provider waits with a visible “wait shortened” caption.
    its current learned rules. Confirm Ravi's **Presentation** switch is on.
 3. Click **Create live run**. If the currently displayed run is blocked or stale,
    the same button reads **Create recovery plan**; confirm **Live** remains
-   selected. Wait for the sponsor plan, inspect its three cues, then click
-   **Approve plan**. If another run is unfinished, select it in **Run history**
+   selected. Inspect the returned three cues and wait for **Finalizing plan**
+   to clear. **Approve plan** becomes available only after RocketRide preparation
+   finishes with verified evidence. If another run is unfinished, select it in **Run history**
    and finish or cancel it before creating Ravi's run.
 4. Click **Execute live sequence** once. Let introduction → presentation →
    holding finish.

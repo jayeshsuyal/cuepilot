@@ -7,6 +7,21 @@ type FrozenCueIntent = {
 };
 export type CueIntent =
   FrozenCueIntent | { runId: string; requestId: string; stepIndex: null };
+export function inspectCueIntent(
+  source: Source,
+  storage: () => Storage = () => sessionStorage,
+): { intent: CueIntent | null; error: string } {
+  try {
+    return { intent: readIntent(storage(), source), error: "" };
+  } catch {
+    // Keep unreadable intent untouched. Losing it could duplicate a prior cue.
+    return {
+      intent: null,
+      error:
+        "Saved cue state could not be read. Operator actions are paused. Review the last run's receipts and restore browser storage before reloading; do not discard an unresolved cue.",
+    };
+  }
+}
 const key = (source: Source) => `cuepilot.pending-cue.${source}`;
 const validStep = (value: unknown): value is number =>
   typeof value === "number" &&

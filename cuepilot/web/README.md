@@ -45,8 +45,9 @@ The client never receives or stores the credential. Read-only GETs need no token
    the stage on holding and supplies the reason. Restore presentation readiness,
    create a recovery plan, approve it, and advance its three cues.
 5. With **Live** selected, **Create live run** sends a sponsor-backed preparation
-   request. **Execute live sequence** is available only for a returned approved
-   sponsor plan. Selecting a mode or reloading never starts execution. Full live
+   request. A returned plan remains in **Finalizing plan** until RocketRide
+   preparation is verified; approval is disabled during that interval.
+   **Execute live sequence** is available only for a returned approved sponsor plan. Selecting a mode or reloading never starts execution. Full live
    API acceptance passed on the configured demo machine at 22:35 UTC on September 11, 2026;
    see [sponsor readiness](../../docs/sponsor-readiness.md). A fresh checkout
    still needs private service setup and a learned play. Inspect the returned
