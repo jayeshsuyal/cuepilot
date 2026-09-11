@@ -14,6 +14,12 @@ const ROUTES = Object.freeze({
   execute: ['validate-show', 'execute', 'verify'],
 });
 const EXPECTED_PROVIDERS = ['webhook', 'agent_rocketride', 'response_answers', 'llm_openai', 'memory_internal', 'tool_http_request'];
+export const ROCKETRIDE_LIMITS = Object.freeze({
+  prepare: Object.freeze({ operationMs: 480_000, sendMs: 360_000, httpSeconds: 180 }),
+  execute: Object.freeze({ operationMs: 360_000, sendMs: 240_000, httpSeconds: 120 }),
+  controlMs: 20_000, bridgeMs: 12_000, terminateMs: 15_000, disconnectMs: 8_000,
+});
+const SCENES = ['intro', 'presentation', 'holding'];
 
 class BridgeError extends Error {
   constructor(code) { super(code); this.name = 'BridgeError'; this.code = code; }
@@ -22,13 +28,22 @@ const fail = code => { throw new BridgeError(code); };
 const escapeRegex = value => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 const validRunId = value => typeof value === 'string' && /^[A-Za-z0-9_-]{1,128}$/.test(value);
 
-async function bounded(promise, milliseconds, code) {
+async function bounded(operation, milliseconds, code, signal) {
   let timer;
+  let abort;
   try {
-    return await Promise.race([promise, new Promise((_, reject) => {
+    signal?.throwIfAborted();
+    return await Promise.race([Promise.resolve().then(operation), new Promise((_, reject) => {
       timer = setTimeout(() => reject(new BridgeError(code)), milliseconds);
+      if (signal) {
+        abort = () => reject(signal.reason);
+        signal.addEventListener('abort', abort, { once: true });
+      }
     })]);
-  } finally { clearTimeout(timer); }
+  } finally {
+    clearTimeout(timer);
+    if (abort) signal.removeEventListener('abort', abort);
+  }
 }
 
 function publicBase(value) {
@@ -50,7 +65,8 @@ function settings(env) {
   try {
     const u = new URL(env.ROCKETRIDE_URI);
     if (u.protocol !== 'https:' || u.hostname !== 'staging.rocketride.ai'
-        || u.username || u.password || u.search || u.hash) fail('STAGING_URI_REQUIRED');
+        || u.username || u.password || u.search || u.hash || u.pathname !== '/'
+        || (u.port && u.port !== '443')) fail('STAGING_URI_REQUIRED');
     uri = u.origin;
   } catch { errors.push('STAGING_URI_REQUIRED'); }
   const apiKey = env.ROCKETRIDE_APIKEY;
@@ -75,6 +91,10 @@ export async function buildRocketRidePipeline({ phase = 'prepare', env = process
   const known = modelSchema.Pipe?.schema?.properties?.profile?.enum;
   if (!Array.isArray(known) || !known.includes(cfg.profile) || cfg.profile === 'custom') fail('MODEL_PROFILE_NOT_VERIFIED');
   const model = pipeline.components.find(node => node.provider === 'llm_openai');
+  const agent = pipeline.components.find(node => node.provider === 'agent_rocketride');
+  if (agent.config.instructions.filter(instruction => instruction.includes('timeout ${ROCKETRIDE_CUEPILOT_HTTP_TIMEOUT_SECONDS}')).length !== 1) fail('PIPELINE_TIMEOUT_BINDING_INVALID');
+  agent.config.instructions = agent.config.instructions.map(instruction => instruction.replace(
+    'timeout ${ROCKETRIDE_CUEPILOT_HTTP_TIMEOUT_SECONDS}', `timeout ${ROCKETRIDE_LIMITS[phase].httpSeconds}`));
   // The checked-in template owns this server-side reference. Never substitute a
   // runtime credential into the pipeline sent for validation or stored remotely.
   const credentialReference = model.config[model.config.profile]?.apikey;
@@ -97,28 +117,30 @@ export async function buildRocketRidePipeline({ phase = 'prepare', env = process
   return pipeline;
 }
 
-async function connect(cfg) {
+async function connect(cfg, signal, phase = 'prepare') {
   if (!cfg.uri || !cfg.apiKey) fail('STAGING_AUTH_CONFIGURATION_REQUIRED');
-  const client = new RocketRideClient({ uri: cfg.uri, auth: cfg.apiKey, persist: false, env: {}, requestTimeout: 20_000 });
+  // SDK send() awaits DataPipe.close() using this same request timeout. A short
+  // default would silently truncate the entire model/tool execution to 20s.
+  const client = new RocketRideClient({ uri: cfg.uri, auth: cfg.apiKey, persist: false, env: {}, requestTimeout: ROCKETRIDE_LIMITS[phase].sendMs + 5_000 });
   try {
-    await bounded(client.connect(cfg.apiKey, { timeout: 10_000 }), 15_000, 'STAGING_CONNECT_TIMEOUT');
+    await bounded(() => client.connect(cfg.apiKey, { timeout: 10_000 }), 15_000, 'STAGING_CONNECT_TIMEOUT', signal);
     return client;
   } catch (error) {
-    await bounded(client.disconnect(), 5_000, 'DISCONNECT_TIMEOUT').catch(() => {});
+    await bounded(() => client.disconnect(), 5_000, 'DISCONNECT_TIMEOUT').catch(() => {});
     throw error;
   }
 }
 
-async function validateAndBalance(client, pipeline, profile) {
+async function validateAndBalance(client, pipeline, profile, signal) {
   // Verify against the current server as well as the checked-in schema snapshot.
-  const definition = await client.getService('llm_openai');
+  const definition = await bounded(() => client.getService('llm_openai'), ROCKETRIDE_LIMITS.controlMs, 'MODEL_SCHEMA_TIMEOUT', signal);
   const profiles = definition?.Pipe?.schema?.properties?.profile?.enum;
   if (!Array.isArray(profiles) || !profiles.includes(profile)) fail('MODEL_PROFILE_NOT_ON_STAGING');
-  const validation = await client.validate({ pipeline });
+  const validation = await bounded(() => client.validate({ pipeline }), ROCKETRIDE_LIMITS.controlMs, 'VALIDATION_TIMEOUT', signal);
   if (!Array.isArray(validation?.errors) || !Array.isArray(validation?.warnings)) fail('VALIDATION_RESPONSE_INVALID');
   const orgId = client.getOrgId();
   if (!orgId) fail('CREDIT_BALANCE_ORGANIZATION_UNAVAILABLE');
-  const credit = await client.billing.getCreditBalance(orgId);
+  const credit = await bounded(() => client.billing.getCreditBalance(orgId), ROCKETRIDE_LIMITS.controlMs, 'CREDIT_BALANCE_TIMEOUT', signal);
   const balances = credit?.balances;
   if (!balances || typeof balances !== 'object' || Array.isArray(balances)
       || Object.values(balances).some(value => typeof value !== 'number' || !Number.isFinite(value))) fail('CREDIT_BALANCE_RESPONSE_INVALID');
@@ -130,23 +152,69 @@ async function validateAndBalance(client, pipeline, profile) {
   };
 }
 
-async function bridgeRead(cfg, path) {
-  const response = await fetch(`${cfg.base}${path}`, {
-    method: 'GET', headers: { Authorization: `Bearer ${cfg.bridgeToken}`, Accept: 'application/json' },
-    redirect: 'error', signal: AbortSignal.timeout(12_000),
-  });
-  if (!response.ok) fail('BRIDGE_READ_FAILED');
-  const contentLength = Number(response.headers.get('content-length') || 0);
-  if (contentLength > 1_000_000) fail('BRIDGE_RESPONSE_TOO_LARGE');
-  const value = await response.json();
-  if (!value || typeof value !== 'object' || Array.isArray(value)) fail('BRIDGE_RESPONSE_INVALID');
-  return value;
+async function bridgeRead(cfg, path, signal) {
+  const readSignal = AbortSignal.any([AbortSignal.timeout(ROCKETRIDE_LIMITS.bridgeMs), ...(signal ? [signal] : [])]);
+  return bounded(async () => {
+    const response = await fetch(`${cfg.base}${path}`, {
+      method: 'GET', headers: { Authorization: `Bearer ${cfg.bridgeToken}`, Accept: 'application/json' },
+      redirect: 'error', signal: readSignal,
+    });
+    if (!response.ok) fail('BRIDGE_READ_FAILED');
+    const reader = response.body?.getReader();
+    if (!reader) fail('BRIDGE_RESPONSE_INVALID');
+    const chunks = [];
+    let size = 0;
+    try {
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        size += value.byteLength;
+        if (size > 1_000_000) fail('BRIDGE_RESPONSE_TOO_LARGE');
+        chunks.push(value);
+      }
+    } finally { await reader.cancel().catch(() => {}); }
+    let value;
+    try { value = JSON.parse(Buffer.concat(chunks).toString('utf8')); } catch { fail('BRIDGE_RESPONSE_INVALID'); }
+    if (!value || typeof value !== 'object' || Array.isArray(value)) fail('BRIDGE_RESPONSE_INVALID');
+    return value;
+  }, ROCKETRIDE_LIMITS.bridgeMs, 'BRIDGE_READ_TIMEOUT', signal);
 }
 
-async function canonicalRun(cfg, runId) {
-  const run = await bridgeRead(cfg, `/api/v1/runs/${encodeURIComponent(runId)}`);
+async function canonicalRun(cfg, runId, signal) {
+  const run = await bridgeRead(cfg, `/api/v1/runs/${encodeURIComponent(runId)}`, signal);
   if (run.id !== runId || !['queued', 'needs_approval', 'approved', 'running', 'completed', 'blocked', 'failed'].includes(run.status)) fail('CANONICAL_RUN_INVALID');
   return run;
+}
+
+function verifiedPlan(run) {
+  const plan = run.plan;
+  // The dedicated public bridge deliberately projects only the approved hash.
+  // Full recipe, provenance, show revision and cue guards remain local to API.
+  if (run.executionMode !== 'live' || !plan || typeof plan.hash !== 'string'
+      || !/^[a-f0-9]{64}$/.test(plan.hash)) fail('CANONICAL_PLAN_INVALID');
+  return plan;
+}
+
+function freshRun(run) {
+  if (!Array.isArray(run.receipts) || run.receipts.length !== 0
+      || (run.nextStep !== undefined && run.nextStep !== 0)) fail('FRESH_RUN_REQUIRED');
+}
+
+function executionEvidence(run) {
+  verifiedPlan(run);
+  const receipts = run.receipts;
+  if (run.status !== 'completed' || (run.nextStep !== undefined && run.nextStep !== 3)
+      || !Array.isArray(receipts) || receipts.length !== 3
+      || receipts.some((r, index) => r.ok !== true || r.runId !== run.id || r.stepIndex !== index
+        || r.scene !== SCENES[index] || typeof r.id !== 'string' || !r.id
+        || !Number.isInteger(r.stageRevision) || r.stageRevision < 1
+        || (index > 0 && r.stageRevision <= receipts[index - 1].stageRevision)
+        || typeof r.committedAt !== 'string' || !Number.isFinite(Date.parse(r.committedAt)))
+      || new Set(receipts.map(r => r.id)).size !== 3) fail('CANONICAL_RECEIPTS_INVALID');
+  // The API computes this from verified Rote execution AND successful outcome
+  // write-back. Stage completion alone precedes both and cannot prove success.
+  if (run.verifiedCompletion !== true) fail('VERIFIED_COMPLETION_REQUIRED');
+  return { receiptIds: receipts.map(receipt => receipt.id), receiptCount: receipts.length, verifiedCompletion: true };
 }
 
 function knownError(error, stage) {
@@ -154,7 +222,7 @@ function knownError(error, stage) {
 }
 
 /** Validation never starts a task or sends the model key / bridge token. */
-export async function checkRocketRide({ env = process.env, offline = false } = {}) {
+export async function checkRocketRide({ env = process.env, offline = false, signal } = {}) {
   const cfg = settings(env);
   const report = { ok: false, taskStarted: false, blockers: [...cfg.errors], offline };
   let client;
@@ -164,21 +232,21 @@ export async function checkRocketRide({ env = process.env, offline = false } = {
     report.localPipelineValid = true;
     if (!offline) {
       stage = 'staging_auth';
-      client = await connect(cfg);
+      client = await connect(cfg, signal);
       stage = 'staging_validation';
-      Object.assign(report, await validateAndBalance(client, pipeline, cfg.profile));
+      Object.assign(report, await validateAndBalance(client, pipeline, cfg.profile, signal));
       if (!report.validation.passed) report.blockers.push('PIPELINE_VALIDATION_FAILED');
       if (!report.credits.positiveComputeCredit) report.blockers.push('POSITIVE_COMPUTE_CREDIT_REQUIRED');
       if (cfg.base && cfg.bridgeToken) {
         stage = 'bridge_health';
-        await bridgeRead(cfg, '/api/v1/health');
+        await bridgeRead(cfg, '/api/v1/health', signal);
         report.bridgeReachableFromClient = true;
       }
     }
     report.ok = report.blockers.length === 0 && !offline;
   } catch (error) { report.blockers.push(knownError(error, stage)); }
   finally {
-    if (client) await bounded(client.disconnect(), 8_000, 'DISCONNECT_TIMEOUT').catch(() => report.blockers.push('CONNECTION_CLEANUP_UNCONFIRMED'));
+    if (client) await bounded(() => client.disconnect(), ROCKETRIDE_LIMITS.disconnectMs, 'DISCONNECT_TIMEOUT').catch(() => report.blockers.push('CONNECTION_CLEANUP_UNCONFIRMED'));
   }
   report.blockers = [...new Set(report.blockers)];
   report.ok = report.ok && report.blockers.length === 0;
@@ -186,42 +254,70 @@ export async function checkRocketRide({ env = process.env, offline = false } = {
 }
 
 /** Canonical backend status, not generated answers, decides whether a phase succeeded. */
-export async function runRocketRide({ runId, phase = 'prepare', env = process.env } = {}) {
+export async function runRocketRide({ runId, phase = 'prepare', env = process.env, signal } = {}) {
   const cfg = settings(env);
-  const report = { ok: false, taskStarted: false, phase, blockers: [...cfg.errors], elapsedMs: null };
+  const report = { ok: false, runId, taskStarted: false, taskStartAttempted: false, freshExecution: false,
+    phase, blockers: [...cfg.errors], elapsedMs: null };
   let client;
   let taskToken;
+  let requestedToken;
+  let before;
   let startAttempted = false;
   let stage = 'configuration';
   const began = Date.now();
+  const limits = ROCKETRIDE_LIMITS[phase] || ROCKETRIDE_LIMITS.prepare;
+  report.operationDeadlineMs = limits.operationMs;
+  report.maxElapsedMs = limits.operationMs + ROCKETRIDE_LIMITS.terminateMs + ROCKETRIDE_LIMITS.disconnectMs + ROCKETRIDE_LIMITS.bridgeMs;
+  const deadline = new AbortController();
+  const timer = setTimeout(() => deadline.abort(new BridgeError('OPERATION_DEADLINE_EXCEEDED')), limits.operationMs);
+  const operationSignal = AbortSignal.any([deadline.signal, ...(signal ? [signal] : [])]);
   try {
+    operationSignal.throwIfAborted();
     if (!validRunId(runId)) fail('INVALID_RUN_ID');
     if (!ROUTES[phase]) fail('INVALID_PHASE');
     if (cfg.errors.length) return report;
     const pipeline = await buildRocketRidePipeline({ phase, env });
     report.pipelineId = pipeline.project_id;
     stage = 'bridge_preflight';
-    await bridgeRead(cfg, '/api/v1/health');
-    const before = await canonicalRun(cfg, runId);
+    await bridgeRead(cfg, '/api/v1/health', operationSignal);
+    before = await canonicalRun(cfg, runId, operationSignal);
     if (before.executionMode !== 'live') fail('LIVE_RUN_REQUIRED');
     if ((phase === 'prepare' && before.status === 'needs_approval') || (phase === 'execute' && before.status === 'completed')) {
+      verifiedPlan(before);
+      if (phase === 'execute') Object.assign(report, executionEvidence(before));
+      else freshRun(before);
       report.ok = true;
       report.status = before.status;
+      report.planHash = before.plan.hash;
+      report.canonicalVerified = true;
       report.alreadySatisfied = true;
       return report;
     }
     if (phase === 'prepare' && before.status !== 'queued') fail('PREPARATION_REQUIRES_QUEUED_RUN');
-    if (phase === 'execute' && (before.status !== 'approved' || !before.plan?.hash)) fail('EXECUTION_REQUIRES_APPROVED_PLAN');
+    if (phase === 'execute') {
+      if (before.status !== 'approved') fail('EXECUTION_REQUIRES_APPROVED_PLAN');
+      verifiedPlan(before);
+      report.planHash = before.plan.hash;
+    }
+    freshRun(before);
     stage = 'staging_auth';
-    client = await connect(cfg);
+    client = await connect(cfg, operationSignal, phase);
     stage = 'staging_validation';
-    Object.assign(report, await validateAndBalance(client, pipeline, cfg.profile));
+    Object.assign(report, await validateAndBalance(client, pipeline, cfg.profile, operationSignal));
     if (!report.validation.passed) fail('PIPELINE_VALIDATION_FAILED');
     if (!report.credits.positiveComputeCredit) fail('POSITIVE_COMPUTE_CREDIT_REQUIRED');
+    // Validation/authentication can take a minute. Never launch against stale
+    // preflight state; the API must still atomically claim execution itself.
+    stage = 'bridge_recheck';
+    const current = await canonicalRun(cfg, runId, operationSignal);
+    if (current.executionMode !== 'live' || current.status !== before.status
+        || current.speakerId !== before.speakerId || JSON.stringify(current.plan) !== JSON.stringify(before.plan)) fail('RUN_CHANGED_BEFORE_START');
+    freshRun(current);
     stage = 'pipeline_start';
-    taskToken = randomUUID();
+    taskToken = requestedToken = randomUUID();
     startAttempted = true;
-    const started = await bounded(client.use({
+    report.taskStartAttempted = true;
+    const started = await bounded(() => client.use({
       pipeline, token: taskToken, source: 'webhook_1', ttl: 120, threads: 1, useExisting: false,
       name: `CuePilot ${phase}`, pipelineTraceLevel: 'metadata',
       env: {
@@ -230,33 +326,54 @@ export async function runRocketRide({ runId, phase = 'prepare', env = process.en
         ROCKETRIDE_CUEPILOT_OPENAI_KEY: cfg.modelKey,
         ROCKETRIDE_CUEPILOT_PHASE: phase,
       },
-    }), 45_000, 'PIPELINE_START_TIMEOUT');
+    }), 45_000, 'PIPELINE_START_TIMEOUT', operationSignal);
     if (!started || typeof started.token !== 'string' || !started.token) fail('PIPELINE_START_RESPONSE_INVALID');
     taskToken = started.token;
     report.taskStarted = true;
+    if (taskToken !== requestedToken) fail('PIPELINE_TASK_IDENTITY_CHANGED');
     stage = 'pipeline_send';
     const question = new Question({ expectJson: true });
     question.addQuestion(JSON.stringify({ runId, phase }));
-    const result = await bounded(client.send(taskToken, JSON.stringify(question.toDict()), {}, 'application/rocketride-question'), 180_000, 'PIPELINE_RESPONSE_UNCERTAIN');
+    const result = await bounded(() => client.send(taskToken, JSON.stringify(question.toDict()), {}, 'application/rocketride-question'), limits.sendMs, 'PIPELINE_RESPONSE_UNCERTAIN', operationSignal);
     report.answerReceived = Boolean(result?.result_types && Object.values(result.result_types).includes('answers'));
     // Raw answers and traces can contain credentials echoed by a provider: neither is returned or logged.
-    stage = 'canonical_verification';
-    const after = await canonicalRun(cfg, runId);
-    report.status = after.status;
-    report.receiptCount = Array.isArray(after.receipts) ? after.receipts.length : 0;
-    report.ok = phase === 'prepare' ? after.status === 'needs_approval' : after.status === 'completed';
-    if (!report.ok) report.blockers.push(after.status === 'blocked' ? 'RUN_BLOCKED_BY_BACKEND' : 'EXPECTED_PHASE_STATUS_NOT_REACHED');
   } catch (error) {
-    report.blockers.push(knownError(error, stage));
-    if (startAttempted) report.reconciliationRequired = true;
+    report.blockers.push(operationSignal.aborted
+      ? (deadline.signal.aborted ? 'OPERATION_DEADLINE_EXCEEDED' : 'OPERATION_CANCELLED') : knownError(error, stage));
   } finally {
+    clearTimeout(timer);
     if (client && taskToken && startAttempted) {
       try {
-        await bounded(client.terminate(taskToken), 15_000, 'TERMINATE_TIMEOUT');
+        // The SDK accepts a caller-supplied token. An ambiguous use() response
+        // still requires terminating that token; idle TTL is not cancellation.
+        await bounded(() => Promise.all([...new Set([requestedToken, taskToken])].map(token => client.terminate(token))),
+          ROCKETRIDE_LIMITS.terminateMs, 'TERMINATE_TIMEOUT');
         report.taskTerminated = true;
       } catch { report.blockers.push('TASK_CLEANUP_UNCONFIRMED_120_SECOND_IDLE_TTL'); }
     }
-    if (client) await bounded(client.disconnect(), 8_000, 'DISCONNECT_TIMEOUT').catch(() => report.blockers.push('CONNECTION_CLEANUP_UNCONFIRMED'));
+    if (client) await bounded(() => client.disconnect(), ROCKETRIDE_LIMITS.disconnectMs, 'DISCONNECT_TIMEOUT').catch(() => report.blockers.push('CONNECTION_CLEANUP_UNCONFIRMED'));
+    // Reconcile even after a lost response or cancellation, after task cleanup.
+    // This GET is an observation, never proof that an in-flight bridge job stopped.
+    if (startAttempted) {
+      try {
+        const after = await canonicalRun(cfg, runId);
+        report.status = after.status;
+        report.receiptCount = Array.isArray(after.receipts) ? after.receipts.length : 0;
+        if (after.executionMode !== 'live' || after.speakerId !== before.speakerId) fail('CANONICAL_RUN_CHANGED');
+        if (phase === 'execute' && JSON.stringify(after.plan) !== JSON.stringify(before.plan)) fail('APPROVED_PLAN_CHANGED');
+        if (after.status !== (phase === 'prepare' ? 'needs_approval' : 'completed')) fail(after.status === 'blocked' ? 'RUN_BLOCKED_BY_BACKEND' : 'EXPECTED_PHASE_STATUS_NOT_REACHED');
+        verifiedPlan(after);
+        if (phase === 'execute') Object.assign(report, executionEvidence(after));
+        else freshRun(after);
+        report.planHash = after.plan.hash;
+        report.canonicalVerified = true;
+        report.ok = report.blockers.length === 0;
+        report.freshExecution = report.ok && phase === 'execute';
+      } catch (error) { report.blockers.push(knownError(error, 'canonical_verification')); }
+      // Even apparently successful writes remain uncertain if task startup or
+      // cleanup failed. No automatic retry may infer zero effects from failure.
+      if (report.blockers.length) report.reconciliationRequired = true;
+    }
     report.elapsedMs = Date.now() - began;
     report.blockers = [...new Set(report.blockers)];
     report.ok = report.ok && report.blockers.length === 0;
@@ -274,18 +391,25 @@ async function loadCliEnvironment() {
 }
 
 if (process.argv[1] && pathToFileURL(resolve(process.argv[1])).href === import.meta.url) {
+  const cancellation = new AbortController();
+  const cancel = () => cancellation.abort(new BridgeError('OPERATION_CANCELLED'));
+  process.on('SIGINT', cancel);
+  process.on('SIGTERM', cancel);
   try {
     const args = process.argv.slice(2);
     const env = await loadCliEnvironment();
     let report;
-    if (args.length === 0 || (args.length === 1 && args[0] === '--validate-only')) report = await checkRocketRide({ env });
-    else if (args.length === 1 && args[0] === '--offline') report = await checkRocketRide({ env, offline: true });
-    else if (args.length === 4 && args[0] === '--run' && args[2] === '--phase' && ROUTES[args[3]]) report = await runRocketRide({ runId: args[1], phase: args[3], env });
+    if (args.length === 0 || (args.length === 1 && args[0] === '--validate-only')) report = await checkRocketRide({ env, signal: cancellation.signal });
+    else if (args.length === 1 && args[0] === '--offline') report = await checkRocketRide({ env, offline: true, signal: cancellation.signal });
+    else if (args.length === 4 && args[0] === '--run' && args[2] === '--phase' && ROUTES[args[3]]) report = await runRocketRide({ runId: args[1], phase: args[3], env, signal: cancellation.signal });
     else fail('USAGE_EXPECTED_VALIDATE_ONLY_OR_RUN_ID_PHASE_PREPARE_EXECUTE');
     console.log(JSON.stringify(report, null, 2));
     process.exitCode = report.ok ? 0 : 2;
   } catch (error) {
     console.log(JSON.stringify({ ok: false, taskStarted: false, blockers: [knownError(error, 'runner')] }));
     process.exitCode = 2;
+  } finally {
+    process.removeListener('SIGINT', cancel);
+    process.removeListener('SIGTERM', cancel);
   }
 }

@@ -1,31 +1,143 @@
 # CuePilot × Rote
 
-Rote records and replays the approved stage sequence: **intro → presentation → holding**. This is a local integration. RocketRide orchestration and other sponsor integrations have separate verification states.
+Rote records and replays the approved **intro → presentation → holding** sequence.
+RocketRide orchestrates the surrounding sponsor operations. The local stage API
+remains the authority for approval, current rules/readiness, ownership and receipts.
 
-## Verified on this machine
+## Execution evidence and current limits
 
-- Rote 0.82.0 captured three successful process operations for Maya practice run `55e57559-8896-4ce4-9bfa-4f92a17fea71`, including matching API receipts at Rote references `@1`, `@2`, and `@3`.
-- `rote workspace export` exported that successful trace. The package was parameterized for `run_id` and `base_url`, given explicit cue dependencies, and validated with `rote play validate`.
-- Local learned package: `plays/learned/cuepilot-20260911T193228-ff66cf07/`. Source trace, receipt hashes, and transformation notes are in its `resources/` directory. Package files are read-only; `plays/evidence/active.json` identifies their hashes.
-- **A new-speaker replay is not yet verified.** The Ravi test was interrupted before any replay evidence was saved. Do not describe the product as proven to replay successfully on new input yet.
-- No automated Rote adapter test suite has been completed. Earlier helper capability probes do not constitute stage replay evidence.
+Rote 0.82.0 genuinely captured Maya practice run
+`55e57559-8896-4ce4-9bfa-4f92a17fea71` at references `@1`, `@2`, `@3`, and exported
+`plays/learned/cuepilot-20260911T193228-ff66cf07/`. That package and its evidence
+remain immutable historical local state. **A fresh-speaker Ravi replay has not
+been verified.** The authored 1.5-second display dwell is identical during
+record/replay and is not an AI performance improvement.
 
-Generated packages, CLI transcripts, and the active pointer are ignored local state. A fresh clone must learn its own play. Nothing was released or published to the Rote registry; the exported package is a local draft.
+The hardened adapter uses proof version 2. The historical Maya proof has no rule
+identity or canonical receipt hashes and contains an older transport. It returns
+`learned_package_upgrade_required`; it cannot establish the new verification
+claims. Do not silently rewrite its proof, label it newly verified, or fall back
+to practice. The coordinator must preserve/archive its existing active pointer
+and then record a fresh approved rehearsal to produce a new package. `learn()`
+will not overwrite an existing active pointer. Live learning needs a current
+live plan and matching memory proof; an old practice package does not authorize
+an unrelated live recipe.
+
+Focused synthetic adapter/transport tests and local Python subprocess tests are
+included. They prove validation and cleanup behavior, not sponsor success.
+The installed Rote SDK's `ProcessExecResponseBody`, presentation outcomes and
+actual Maya exporter shape were inspected. A separate synthetic `play validate`
+attempt with an isolated unauthenticated runtime exited 77 (`rote requires login`);
+validation of the changed renderer and actual fresh-input replay remain for the
+coordinator's authenticated runtime. No credentials were copied for that check.
+
+Generated packages, transcripts and active pointers remain ignored local drafts.
+Nothing is published to the Rote registry. A fresh clone must learn its own play.
 
 ## Adapter contract
 
-`integrations/rote.py` exposes `inspect()` / `readiness()`, `await learn(run_id, base_url)`, and `await replay(run_id, base_url)`. Results contain `provider`, `status`, `operation`, `evidence`, and `reason`. `replay` returns `blocked` with reason `learned_play_required` before the first learned package exists.
+`integrations/rote.py` preserves `inspect()` / `readiness()`,
+`await learn(run_id, base_url)`, and `await replay(run_id, base_url)`.
+Results retain `provider`, `status`, `operation`, `evidence`, and `reason`.
+Verified inspection/learning/replay adds `evidence.procedure: {id, sha256}`:
+`id` is the immutable package name; `sha256` hashes its proof file. The same
+identity is also provided as top-level `procedure` for direct adapter consumers.
+Inspection says `replayExecuted: false`; it only verifies local prerequisites.
 
-Learning invokes real `rote proc run` three times, checks the captured child exit codes and receipts, then exports. Rote's recorder itself can exit zero after capturing a failed child, so the adapter checks the recorded child status separately. Replay invokes **one `rote play run`**; its DAG owns cue ordering. Python does not reimplement the replay loop.
+Verified execution includes full canonical `evidence.receipts`, separately matched
+`capturedReceipts`, `identity`, and `commandEvidence`. Replay also provides the
+Rote run ID, `learnedFromRunId`, `newInput`, `newSpeaker`, and `replayExecuted`.
+Different run IDs alone do not prove a different speaker. Failures after a cue
+attempt include `executionAttempted: true` and `reconciliationRequired: true`,
+even if the API has already reached `completed`.
 
-The authored `plays/stage-sequence/resources/cue.py` helper performs one authenticated HTTP cue and validates its receipt. It has a fixed 1.5-second display dwell after intro and presentation. This authored duration is not an AI performance improvement. The learned procedure comes from the captured successful trace; packaging and parameter generalization are explicit authored transformations.
+## Identity and execution gates
 
-Only loopback HTTP(S) origins are accepted. The bridge token comes privately from the process environment or ignored `cuepilot/.env`; it is never a CLI argument. The helper disables proxies and redirects. The API remains responsible for approval, live asset readiness, step order, and idempotency on every cue.
+Both learning and replay require `status: approved`, an empty receipt list, and
+integer `nextStep: 0`. A busy adapter fails immediately with `rote_execution_busy`.
+Replay additionally refuses the learning run ID. No resume/force-resume flags are
+used; completed or restored steps cannot count as a fresh execution.
 
-## Operational notes / remaining verification
+The reusable identity binds recipe ID/version, the exact three supported cues,
+and SHA-256 of the rule notes. Speaker, show revision and approval hash are
+per-run values and can change between compatible executions. Live identity also
+binds `run.memoryProof` (`recipe_id`, `source_id`, `note_sha256`, `graph_sha256`),
+with the note hash and actual plan recipe ID matching. Practice uses the known
+`speaker-segment-v1` fixture. A changed note, graph, source, recipe version or cue
+order blocks reuse. The full approved plan must remain unchanged during execution.
 
-Use the existing `sponsor-setup/rote/rote` wrapper and authenticated runtime. Recording creates uniquely named `cuepilot-*` workspaces and leaves other workspaces intact. A Codex nested macOS sandbox blocks Rote's own `sandbox-exec`; the local API must run outside that nested sandbox for real Rote execution.
+Every package check verifies the active proof hash, exact file inventory, all file
+hashes, canonical learning receipts, current authored transport/dependencies,
+and deterministic rederivation of `main.ts` from the pinned raw export. Symlinks
+and unlisted files are rejected. This is local integrity checking against the
+trusted active pointer, not a remote signature or protection against a user who
+controls and rewrites all local evidence.
 
-The installed exporter expands `~` even inside the repository directory name `Hackathon~`. The adapter therefore uses relative export/play paths and packaged `@resource{cue.py}` references.
+Learning invokes three real `rote proc run` captures. It queries each typed
+process response and requires spawned=true, no timeout, and integer exit code 0.
+A recorder exit of zero alone is insufficient. Captured receipts must match the
+API's final receipts by run, step, deterministic request ID, receipt ID, scene,
+revision, commit time and canonical JSON digest. The raw wire digest remains
+available separately. Only then is the successful trace exported and validated.
 
-Next verification: approve a fresh Ravi practice run, call `replay`, and require both Rote's three completed steps and the API's three matching ordered receipts. Then verify a fresh approved run whose asset becomes missing fails before a stage cue. These checks remain outstanding. Never count an old completed run or authored helper probe as a successful new-input replay.
+Parameter generalization accepts exactly `run_id` and `base_url` as required
+string parameters with no defaults, the three expected captured argv lists, and
+no unexpected execution fields. It preserves Rote's step names, packages the
+one-cue helper, and makes the recorded ordering explicit. An appended authored
+presentation renderer exposes typed step outcomes and process status/stdout;
+it does not execute cues. These transformations are recorded in the proof.
+
+Replay invokes **one `rote play run`**. Rote's DAG owns deterministic cue ordering.
+The renderer must report three newly completed process steps with successful
+child exits. Each captured receipt must match the API's three ordered canonical
+receipts, with unique IDs and consecutive stage revisions. A success summary or
+the API's completed status alone is insufficient. Package identity is rechecked
+after execution.
+
+## Timeouts and cancellation
+
+An aggregate 105-second deadline covers preflight, captures or replay, export,
+validation and receipt checks. Each ordinary CLI call has a 60-second limit;
+`play run` has a 90-second limit inside that aggregate deadline. Local status GETs
+use an 8-second socket timeout; the cue transport uses 12 seconds. No retries or
+unbounded execution queues are introduced.
+
+Each CLI starts a new POSIX process group with stdin disabled. Timeout or
+cancellation kills the whole group and drains/reaps the CLI, with a 5-second
+communication cleanup bound. Process creation is shielded so cancellation during
+pipe setup cannot discard the group leader's handle; creation must finish before
+cleanup can recover that handle. Thus a pathological OS process-creation stall
+can delay cancellation beyond the normal 110-second operation/cleanup window.
+Cancellation is re-raised after cleanup and the API must record that interrupted
+attempt before allowing another execution. A killed process cannot revoke an
+HTTP cue already committed by the stage API: always reconcile canonical receipts.
+
+RocketRide's execute HTTP window is 120 seconds. Its separate prepare and execute
+phase deadlines are documented in `INTEGRATIONS_ROCKETRIDE.md`; the parent CLI
+needs a 540-second outer deadline and 40 seconds of SIGTERM cleanup grace.
+
+## Coordinator API integration
+
+- Preserve approved status until the execution operation is claimed. Use atomic
+  per-run operation claims; the adapter's process-local lock is not a database
+  claim and cannot protect multiple API workers.
+- Supply the full local run, including current `memoryProof`, from GET
+  `/api/v1/runs/{id}` on loopback port 8787. The public orchestration bridge can
+  keep its separate redacted projection on port 8788.
+- Bind current approval/rule/readiness and operation ownership inside every stage
+  cue transaction. Checks here do not replace those transaction guards.
+- Persist the full safe adapter result. Treat failed/blocked results and
+  cancellation as incomplete even when physical stage receipts are complete.
+  Reconcile interrupted/ambiguous attempts instead of starting a blind replay.
+- Before successful outcome write-back, require verified Rote execution, matching
+  canonical receipts and the exact `evidence.procedure`. Root's public
+  `verifiedCompletion` marker must require both verified Rote execution and
+  verified outcome write-back; RocketRide checks that marker.
+
+Use the existing authenticated `sponsor-setup/rote/rote` wrapper. Recording creates
+uniquely named workspaces and leaves unrelated workspaces intact. Nested macOS
+sandboxing can block Rote's own `sandbox-exec`; the coordinator runs real Rote
+checks outside that nested sandbox. Relative export/play paths avoid the
+installed exporter's expansion of `~` inside the repository name `Hackathon~`.
+Only loopback HTTP(S) origins are accepted by the cue helper; bearer credentials
+remain in the private environment, and proxies/redirects are disabled.

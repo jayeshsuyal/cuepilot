@@ -44,16 +44,49 @@ def validate_run_id(value):
     return value
 
 
+def _validate_step_index(step_index):
+    if type(step_index) is not int or step_index not in (0, 1, 2):
+        raise ValueError("step_index must be 0, 1, or 2")
+    return step_index
+
+
+def request_id(run_id, step_index):
+    """Keep retries stable while binding each transport operation to its run."""
+    run_id = validate_run_id(run_id)
+    _validate_step_index(step_index)
+    return "rote-%s-%s" % (hashlib.sha256(run_id.encode()).hexdigest()[:32], step_index)
+
+
+def validate_receipt(receipt, run_id, step_index):
+    """Validate the stage API's canonical receipt for exactly one expected cue."""
+    run_id = validate_run_id(run_id)
+    _validate_step_index(step_index)
+    if (not isinstance(receipt, dict) or receipt.get("ok") is not True or
+            receipt.get("runId") != run_id or type(receipt.get("stepIndex")) is not int or
+            receipt["stepIndex"] != step_index or
+            receipt.get("scene") != ("intro", "presentation", "holding")[step_index] or
+            type(receipt.get("stageRevision")) is not int or receipt["stageRevision"] < 1 or
+            not isinstance(receipt.get("id"), str) or not receipt["id"].strip() or
+            not isinstance(receipt.get("committedAt"), str) or not receipt["committedAt"].strip()):
+        raise ValueError("stage receipt does not match this run and cue")
+    return receipt
+
+
+def receipt_digest(receipt):
+    """Hash receipt content independently of JSON key order and wire whitespace."""
+    canonical = json.dumps(receipt, sort_keys=True, separators=(",", ":"), allow_nan=False)
+    return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
+
+
 def send_cue(run_id, base_url, step_index):
     run_id = validate_run_id(run_id)
     base_url = loopback_url(base_url)
-    if type(step_index) is not int or step_index not in (0, 1, 2):
-        raise ValueError("step_index must be 0, 1, or 2")
+    _validate_step_index(step_index)
     token = os.environ.get("CUEPILOT_BRIDGE_TOKEN", "")
     if not token or "\r" in token or "\n" in token:
         raise ValueError("CUEPILOT_BRIDGE_TOKEN is unavailable")
-    request_id = "rote-%s-%s" % (hashlib.sha256(run_id.encode()).hexdigest()[:32], step_index)
-    payload = {"runId": run_id, "stepIndex": step_index, "requestId": request_id}
+    operation_id = request_id(run_id, step_index)
+    payload = {"runId": run_id, "stepIndex": step_index, "requestId": operation_id}
     request = urllib.request.Request(
         base_url + "/api/v1/tools/stage/cue",
         data=json.dumps(payload).encode("utf-8"), method="POST",
@@ -67,6 +100,7 @@ def send_cue(run_id, base_url, step_index):
             if len(raw) > 65536:
                 raise ValueError("stage receipt exceeds the size limit")
     except urllib.error.HTTPError as error:
+        error.close()
         raise ValueError("stage API rejected cue (HTTP %s)" % error.code) from None
     except (urllib.error.URLError, TimeoutError, OSError):
         raise ValueError("stage API is unreachable") from None
@@ -74,13 +108,13 @@ def send_cue(run_id, base_url, step_index):
         receipt = json.loads(raw)
     except (ValueError, UnicodeDecodeError):
         raise ValueError("stage API did not return a JSON receipt") from None
-    if (not isinstance(receipt, dict) or receipt.get("ok") is not True or
-            receipt.get("runId") != run_id or type(receipt.get("stepIndex")) is not int or
-            receipt["stepIndex"] != step_index):
-        raise ValueError("stage receipt does not match this run and cue")
+    validate_receipt(receipt, run_id, step_index)
     return {
         "ok": True, "runId": run_id, "stepIndex": step_index,
-        "requestId": request_id, "receiptSha256": hashlib.sha256(raw).hexdigest(),
+        "requestId": operation_id, "receiptSha256": hashlib.sha256(raw).hexdigest(),
+        "receiptCanonicalSha256": receipt_digest(receipt), "receiptId": receipt["id"],
+        "stageRevision": receipt["stageRevision"], "scene": receipt["scene"],
+        "committedAt": receipt["committedAt"],
     }
 
 
