@@ -120,6 +120,11 @@ class CuePilotTests(unittest.TestCase):
             store.plan(run['id'])
         for provider in ['cognee','hydradb','hotdata']:
             store.add_trace(run['id'],{'provider':provider,'status':'verified','operation':'unit-test-transport','evidence':{},'supported_template':'speaker-segment-v1','note_sha256':hashlib.sha256(run['notes'].encode()).hexdigest()})
+        proof = {'status':'verified','records':[], 'supported_template':'speaker-segment-v1',
+                 'note_sha256':hashlib.sha256(run['notes'].encode()).hexdigest(),
+                 'graph_sha256':'a'*64, 'recipe_id':'graph-receipt', 'source_id':run['showId']}
+        store.add_trace(run['id'],proof,'ingest-memory')
+        store.add_trace(run['id'],proof,'recall-recipe')
         with self.assertRaisesRegex(Exception,'Show state changed after'):
             store.plan(run['id'])
 
@@ -138,6 +143,27 @@ class CuePilotTests(unittest.TestCase):
         self.assertEqual(result['status'],'completed')
         self.assertEqual(len(result['receipts']),3)
         self.assertEqual(result['traces'][-1]['status'],'blocked')
+
+    def test_operator_cancel_holds_active_segment_without_erasing_receipt(self):
+        run = self.create()
+        first = self.cue(run['id'], 0, 'intro').json()
+        route = f"/api/v1/runs/{run['id']}/cancel"
+        self.assertEqual(self.client.post(route, headers=self.bridge).status_code, 401)
+        cancelled = self.client.post(route, headers=self.operator).json()
+        self.assertEqual(cancelled['status'], 'blocked')
+        self.assertEqual(cancelled['receipts'], [first])
+        self.assertEqual(self.client.get('/api/v1/stage').json()['scene'], 'holding')
+        self.assertEqual(self.cue(run['id'], 1, 'next').status_code, 409)
+        self.assertEqual(self.client.post(route, headers=self.operator).json(), cancelled)
+
+    def test_orchestration_phase_is_claimed_once_before_subprocess_dispatch(self):
+        store = self.app.state.store
+        run = store.create_run('maya', 'Synthetic note', 'live')
+        store.claim_orchestration(run['id'], 'prepare')
+        with self.assertRaisesRegex(Exception, 'already been dispatched'):
+            store.claim_orchestration(run['id'], 'prepare')
+        restarted = create_app(Path(self.temp.name) / 'db.sqlite3', operator_token='operator-test', bridge_token='bridge-test')
+        self.assertEqual(restarted.state.store.get_run(run['id'])['status'], 'blocked')
 
 
 if __name__ == '__main__':

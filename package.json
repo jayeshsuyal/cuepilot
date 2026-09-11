@@ -7,6 +7,7 @@
   "scripts": {
     "dev:cuepilot": "sponsor-setup/memory/.venv/bin/python -m cuepilot.api",
     "test:cuepilot": "sponsor-setup/memory/.venv/bin/python -m unittest discover -s cuepilot/tests -v",
+    "test:cuepilot:rocketride": "node --test cuepilot/tests/test_rocketride.mjs",
     "check:cuepilot:pipeline": "node cuepilot/integrations/rocketride.mjs --validate-only",
     "check:rocketride": "node --env-file-if-exists=.env sponsor-setup/rocketride/check.mjs",
     "sponsors:check": "python3 sponsor-setup/doctor.py",
@@ -23,7 +24,9 @@
     "security:node": "python3 sponsor-setup/snyk/scan.py node",
     "security:python": "python3 sponsor-setup/snyk/scan.py python",
     "security:scan": "python3 sponsor-setup/snyk/scan.py all",
-    "login:snyk": "sponsor-setup/snyk/bin/snyk auth"
+    "login:snyk": "sponsor-setup/snyk/bin/snyk auth",
+    "dev:cuepilot:bridge": "sponsor-setup/memory/.venv/bin/python -m cuepilot.bridge",
+    "check:cuepilot:acceptance": "sponsor-setup/memory/.venv/bin/python -m cuepilot.acceptance"
   },
   "dependencies": {
     "rocketride": "file:sponsor-setup/rocketride/vendor/rocketride-client.tgz"

@@ -3,10 +3,13 @@
 This is a six-node `.pipe` and installed-SDK runner, not proof of an executed
 end-to-end show. The live staging schema was read on 2026-09-11. Authentication
 passed and the earlier pipeline snapshot validated with **0 errors and 0 warnings**;
-the account returned a positive compute-credit balance then. The current hardened
-pipeline still needs fresh staging validation and live execution with the
-configured model and public bridge. `validation-2026-09-11.json` is historical
-evidence, not validation of later source changes.
+the account returned a positive compute-credit balance then. The integrated
+pipeline was revalidated at 20:47 UTC on September 11: **0 errors, 0 warnings**,
+model profile verified and positive compute credit. No task was started. The
+check remains blocked by `PUBLIC_HTTPS_BRIDGE_REQUIRED` and
+`OPENAI_MODEL_KEY_REQUIRED`; it does not establish live execution. Private report:
+`cuepilot/.runtime/rocketride-integration-validation.json`.
+`validation-2026-09-11.json` remains the older historical snapshot.
 
 ## Interfaces
 

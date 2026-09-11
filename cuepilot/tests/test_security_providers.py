@@ -31,6 +31,7 @@ def mock_http(handler):
 
 class FakeProcess:
     def __init__(self):
+        self.pid = 987654321
         self.returncode = None
         self.stopped = asyncio.Event()
         self.reaped = False
@@ -70,7 +71,8 @@ class ProviderSecurityAcceptance(unittest.IsolatedAsyncioTestCase):
         }
         provenance = {"note_sha256": hashlib.sha256(note.encode()).hexdigest(), "graph_sha256": "a" * 64}
         persist = AsyncMock(return_value={"receipt_id": "offline-receipt"})
-        with patch.object(memory, "_extract_graph", AsyncMock(return_value=(graph, provenance))), \
+        with patch.object(memory, "_read_recipe", AsyncMock(return_value=None)), \
+                patch.object(memory, "_extract_graph", AsyncMock(return_value=(graph, provenance))), \
                 patch.object(memory, "_persist_graph", persist):
             result = await memory.ingest_note(note, "acceptance-show")
         self.assertNotEqual(result["status"], "verified", "Contradictory fallback rules must block planning.")
@@ -85,21 +87,25 @@ class ProviderSecurityAcceptance(unittest.IsolatedAsyncioTestCase):
             return process
 
         with tempfile.TemporaryDirectory() as temporary, \
-                patch.object(rote.asyncio, "create_subprocess_exec", side_effect=spawn):
+                patch.object(rote.asyncio, "create_subprocess_exec", side_effect=spawn), \
+                patch.object(rote.os, "killpg", side_effect=lambda pid, sig: process.kill()) as kill_group:
             task = asyncio.create_task(rote._cli([], temporary, {}, Path(temporary) / "evidence", "cancel"))
             await asyncio.wait_for(started.wait(), timeout=1)
             task.cancel()
             with self.assertRaises(asyncio.CancelledError):
                 await task
+        kill_group.assert_called_once_with(process.pid, rote.signal.SIGKILL)
         self.assertTrue(process.stopped.is_set(), "Cancellation must stop the process before another replay can start.")
         self.assertTrue(process.reaped, "Cancellation must wait for process cleanup.")
 
     async def test_timed_out_rote_operation_stops_and_reaps_its_process(self):
         process = FakeProcess()
         with tempfile.TemporaryDirectory() as temporary, \
-                patch.object(rote.asyncio, "create_subprocess_exec", AsyncMock(return_value=process)):
+                patch.object(rote.asyncio, "create_subprocess_exec", AsyncMock(return_value=process)), \
+                patch.object(rote.os, "killpg", side_effect=lambda pid, sig: process.kill()) as kill_group:
             with self.assertRaisesRegex(ValueError, "rote_timeout"):
                 await rote._cli([], temporary, {}, Path(temporary) / "evidence", "timeout", timeout=0.01)
+        kill_group.assert_called_once_with(process.pid, rote.signal.SIGKILL)
         self.assertTrue(process.stopped.is_set())
         self.assertTrue(process.reaped)
 
@@ -116,7 +122,8 @@ class ProviderSecurityAcceptance(unittest.IsolatedAsyncioTestCase):
             observed_hosts.append(request.url.host)
             return httpx.Response(403, text=remote_body)
 
-        with patch.dict(os.environ, environment), mock_http(rejected):
+        with patch.dict(os.environ, environment), mock_http(rejected), \
+                patch.object(memory, "_read_recipe", AsyncMock(return_value=None)):
             results = [await memory.ingest_note("Synthetic production note", "acceptance-show"),
                        await hotdata.validate_show(ready_show(), "maya")]
         self.assertEqual(observed_hosts, ["tenant.cognee.ai", "api.hotdata.dev"])
@@ -132,14 +139,17 @@ class ProviderSecurityAcceptance(unittest.IsolatedAsyncioTestCase):
         def stale_response(request):
             paths.append(request.url.path)
             if request.url.path == "/v1/databases":
-                return httpx.Response(200, json={"id": "acceptance-database"})
+                return httpx.Response(201, json={"id": "acceptance-database", "default_connection_id": "acceptance-connection",
+                                                "default_catalog": "default", "default_schema": "main"})
             if request.url.path.endswith("/loads"):
-                return httpx.Response(200, json={"ok": True})
+                return httpx.Response(200, json={"connection_id": "acceptance-connection", "schema_name": "main",
+                                                "table_name": "cuepilot_state", "row_count": 2})
             self.assertEqual(request.url.path, "/v1/query")
             return httpx.Response(200, json={
                 "columns": ["show_id", "show_revision", "speaker_id", "speaker_ready", "asset_id", "asset_status"],
                 "rows": [["acceptance-show", 3, "maya", 1, "slides-maya", "ready"]],
-                "truncated": False, "row_count": 1,
+                "truncated": False, "row_count": 1, "preview_row_count": 1, "total_row_count": 1,
+                "query_run_id": "acceptance-query",
             })
 
         with patch.dict(os.environ, {"HOTDATA_API_KEY": secrets.token_urlsafe(32), "HOTDATA_WORKSPACE": "acceptance-workspace"}), \

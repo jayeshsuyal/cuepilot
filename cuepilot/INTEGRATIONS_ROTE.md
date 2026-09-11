@@ -6,11 +6,30 @@ remains the authority for approval, current rules/readiness, ownership and recei
 
 ## Execution evidence and current limits
 
+Fresh proof-v2 acceptance **passed at 20:48 UTC on September 11, 2026** using
+actual Rote and the local API:
+
+- Maya `79aa2681-31f1-4c0b-91bd-ae3c40209424` learned package
+  `cuepilot-20260911T204750-3f147f46` with three matched captured/API receipts.
+- Ravi `9015ddcb-a8f4-4a78-bd8c-f716d23a5856` replayed that exact package and proof
+  on a new input/speaker, producing three new matched receipts.
+- Alex `c11f37ca-cc21-40f4-879d-b08fc98fa327` was interrupted 0.053 seconds after
+  introduction by a missing presentation. Replay failed as expected, the stage
+  held, exactly one receipt remained, and restoring the asset did not resume it.
+
+These runs used fixture plans and real Rote; they do **not** establish live
+Cognee/Hotdata/RocketRide execution. The private report is
+`cuepilot/.runtime/acceptance/20260911T204801.614383Z_adb1828fc4ef43f0a2a5dc4e7fca52ea.json`.
+The active practice proof cannot authorize a live memory recipe. Preserve/archive
+its active pointer before a fresh live acceptance; retain the immutable package.
+
+### Historical rehearsal
+
 Rote 0.82.0 genuinely captured Maya practice run
 `55e57559-8896-4ce4-9bfa-4f92a17fea71` at references `@1`, `@2`, `@3`, and exported
 `plays/learned/cuepilot-20260911T193228-ff66cf07/`. That package and its evidence
-remain immutable historical local state. **A fresh-speaker Ravi replay has not
-been verified.** The authored 1.5-second display dwell is identical during
+remain immutable historical local state. Its active pointer was archived before
+the fresh acceptance above. The authored 1.5-second display dwell is identical during
 record/replay and is not an AI performance improvement.
 
 The hardened adapter uses proof version 2. The historical Maya proof has no rule
@@ -28,8 +47,9 @@ included. They prove validation and cleanup behavior, not sponsor success.
 The installed Rote SDK's `ProcessExecResponseBody`, presentation outcomes and
 actual Maya exporter shape were inspected. A separate synthetic `play validate`
 attempt with an isolated unauthenticated runtime exited 77 (`rote requires login`);
-validation of the changed renderer and actual fresh-input replay remain for the
-coordinator's authenticated runtime. No credentials were copied for that check.
+that isolated check did not validate the changed renderer. The subsequent
+authenticated acceptance above verified export/validation and fresh-input replay.
+No credentials were copied into the isolated runtime.
 
 Generated packages, transcripts and active pointers remain ignored local drafts.
 Nothing is published to the Rote registry. A fresh clone must learn its own play.

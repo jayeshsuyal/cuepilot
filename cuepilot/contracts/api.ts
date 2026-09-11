@@ -8,7 +8,7 @@ export interface Stage { revision: number; scene: Scene; speakerId: string | nul
 export interface Evidence { provider: string; status: 'verified' | 'blocked' | 'failed' | 'fixture'; operation: string; evidence: unknown; reason?: string | null; }
 export interface Cue { index: number; scene: Scene; }
 export interface Plan { id: string; hash: string; recipeId: string; recipeVersion: number; showRevision: number; speakerId: string; cues: Cue[]; origin: 'fixture' | 'sponsor'; }
-export interface Run { id: string; showId: string; speakerId: string; executionMode: 'practice' | 'live'; status: RunStatus; notes: string; plan: Plan | null; nextStep: number; receipts: CueReceipt[]; traces: Evidence[]; reason: string | null; createdAt: string; updatedAt: string; }
+export interface Run { id: string; showId: string; speakerId: string; executionMode: 'practice' | 'live'; status: RunStatus; notes: string; plan: Plan | null; nextStep: number; receipts: CueReceipt[]; traces: Evidence[]; reason: string | null; createdAt: string; updatedAt: string; verifiedCompletion?: boolean; }
 export interface CueReceipt { ok: true; id: string; runId: string; stepIndex: number; scene: Scene; stageRevision: number; committedAt: string; }
 export interface ApiError { detail: { code: string; message: string } }
 
@@ -18,6 +18,10 @@ export interface ApiError { detail: { code: string; message: string } }
 // POST /api/v1/runs/:id/approve {planHash} -> Run
 // POST /api/v1/runs/:id/advance {requestId} -> CueReceipt (practice only)
 // POST /api/v1/runs/:id/execute {} -> Run (live, RocketRide -> Rote)
+// POST /api/v1/runs/:id/cancel {} -> Run (holds stage, waits for driver cleanup)
+// Live omitted notes inherit current production notes; changed notes invalidate old approvals.
+// completed describes physical cues. GET run.verifiedCompletion additionally requires
+// verified Rote execution and Hydra outcome write-back; inspect RocketRide trace separately.
 // PATCH /api/v1/assets/:id {status:'ready'|'missing',expectedRevision:number} -> Show
 // PATCH /api/v1/speakers/:id {ready:boolean,expectedRevision:number} -> Show
 // All mutations require operator Bearer token, injected by the dev-server proxy.

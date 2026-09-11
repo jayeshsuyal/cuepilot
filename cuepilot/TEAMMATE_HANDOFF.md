@@ -55,6 +55,18 @@ in client bundle; no fake sponsor badges; live and fixture states distinguishabl
 successful and rejected actions come from server responses. Run the applicable
 Snyk source/dependency checks and report unresolved findings.
 
+Backend additions preserve the original fields/routes. Add an operator Cancel
+button using `POST /api/v1/runs/:id/cancel {}`; it holds an active stage, retains
+committed receipts and waits for driver cleanup. Disable repeat submission while
+the request is pending. A live run with omitted notes inherits the current
+production notes. Explicitly changed notes become the current production rule
+and invalidate old approvals, including runs prepared before that change.
+
+`GET /api/v1/runs/:id` adds `verifiedCompletion`. `completed` means the three
+physical cues happened; `verifiedCompletion: true` also requires verified Rote
+execution and Hydra outcome write-back. Render the final RocketRide execution
+trace separately. Do not label a live run fully verified from `status` alone.
+
 Do not deploy, connect real streaming accounts, add OBS, microphones, scheduling,
 multitenancy or a second agent. One segment type, three speakers, one stage.
 

@@ -3,14 +3,16 @@
 Latest application checks: September 11, 2026, Snyk CLI 1.1307.2,
 organization `jksuyal`.
 
-- CuePilot source: completed with 0 reported findings at 19:44 UTC. A credential
-  placeholder duplication flagged in the preceding scan was removed by reading
-  and validating the reference from the pipeline template. No finding was suppressed.
+- Integrated CuePilot source: completed with 0 reported findings at 20:48 UTC.
+  The full scan covered the integrated API, adapters, bridge and acceptance runner
+  as supported by Snyk. Earlier credential-placeholder and report-filename
+  findings were fixed without suppressions.
 - CuePilot Python runtime (`cuepilot/requirements.txt`): 19 dependencies scanned,
   0 reported vulnerabilities. The application uses Cognee Cloud over HTTP, so this
   manifest does not require the optional local Cognee SDK.
-- Node and optional sponsor-setup dependencies: the six advisories below remain
-  open. The application checks do not clear those findings.
+- Node and optional sponsor-setup dependencies: the final full scan at 20:48 UTC
+  still reports the six advisories below. Its overall exit is 1 because findings
+  remain; it is not a clean full security result.
 
 The earlier sponsor-setup baseline at 17:53–17:54 UTC was:
 
@@ -63,8 +65,8 @@ local SDK and its findings remain disclosed here.
 
 The baseline's raw logs, JSON, SARIF and exact commands are in the private,
 Git-ignored directory `sponsor-setup/snyk/reports/20260911T175330.727446Z/`.
-The latest application source evidence is in
-`sponsor-setup/snyk/reports/20260911T194455.356301Z/`; the application Python
+The latest integrated source and dependency evidence is in
+`sponsor-setup/snyk/reports/20260911T204805.537064Z/`; the application Python
 dependency report is in `sponsor-setup/snyk/reports/cuepilot-app-dependencies/`.
 The separate `mcp-readiness.json` receipt verifies the local server handshake
 and discovery of code and dependency tools; it does not claim an MCP scan ran.

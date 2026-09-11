@@ -1,5 +1,41 @@
 # Backend acceptance and release gates
 
+## Integration result — September 11, 20:48 UTC
+
+The coordinator integrated the fixes below and the memory/Rote/RocketRide work.
+**166 Python tests and 22 Node tests pass.** The combined suite includes local
+HTTP transport and real subprocess lifecycle checks; mock sponsor tests remain
+explicitly separate from live evidence. Local process/listener tests require
+permission to run outside a nested sandbox on the demo machine.
+
+The final bounded review found and then verified fixes for cancellation of
+in-flight tool requests and obsolete queued-rule approval. Cancellation gathers
+both driver and provider tasks even after physical cues complete. Current rules
+are checked at plan, approval, execution claim and cue commit. Acceptance now
+requires fresh Maya learning and Ravi replay of the same package, identity and
+proof, with each captured receipt matching its new canonical run.
+
+Real local acceptance passed: practice Maya/Ravi/blocked Alex at 20:32 UTC;
+fresh Rote Maya learn → Ravi replay → Alex interruption at 20:48 UTC. See
+[Rote evidence](../cuepilot/INTEGRATIONS_ROTE.md). Actual Hydra parser/persistence
+compatibility passed 11 checks with clearly labelled synthetic provenance; this
+does not count as hosted Cognee extraction. Updated RocketRide staging validation
+passed with zero errors/warnings and no task execution.
+
+Full five-sponsor live acceptance remains open pending Cognee/Hotdata/model
+credentials and a working public HTTPS bridge. Cloudflare allocation timed out
+after explicit exposure authorization; the local restricted bridge works. The
+frontend is a separate teammate deliverable and has not been reviewed here.
+No final application/security score or full live signoff is claimed.
+
+The following sections preserve the independent baseline review and its original
+reproductions. Their source locations and failing counts describe `528323d`,
+not the integrated backend. Current additions to the contract document cancel
+and production-note invalidation; baseline comments about absent routes are
+historical.
+
+## Original independent review
+
 Review baseline: `528323d`, September 11, 2026. This review changes only independent
 tests and this checklist. Application fixes, integration, the public bridge, live
 sponsor calls, and signoff belong to the coordinating task. No public v1 contract

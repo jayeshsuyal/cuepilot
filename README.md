@@ -8,6 +8,9 @@ sequence for another speaker: **introduction -> presentation -> holding**.
 - **Teammate frontend:** [copy-paste handoff](cuepilot/TEAMMATE_HANDOFF.md)
 - **Shared types and routes:** [API contract](cuepilot/contracts/api.ts)
 - **Backend:** [FastAPI service](cuepilot/api.py)
+- **Architecture and flow:** [current CuePilot diagrams](docs/cuepilot-architecture.md)
+- **Acceptance runs:** [Maya learn, Ravi replay, Alex interruption](cuepilot/ACCEPTANCE_RUNNER.md)
+- **Public bridge:** [restricted authenticated proxy](cuepilot/BRIDGE.md)
 - **RocketRide:** [validated pipeline and execution gates](cuepilot/INTEGRATIONS_ROCKETRIDE.md)
 - **Cognee, HydraDB and Hotdata:** [adapter setup and verification gaps](cuepilot/INTEGRATIONS_MEMORY.md)
 - **Rote:** [recording evidence and replay handoff](cuepilot/INTEGRATIONS_ROTE.md)
@@ -41,6 +44,7 @@ operator token server-side; the browser must not receive sponsor secrets.
 
 ```sh
 pnpm test:cuepilot
+pnpm test:cuepilot:rocketride
 pnpm check:cuepilot:pipeline
 pnpm security:code
 ```
@@ -60,6 +64,12 @@ The stage API checks plan approval, current show revision, speaker/asset readine
 step order and stage ownership inside the same database transaction as each cue.
 A retry returns its original receipt. A missing presentation switches to holding
 and blocks the outdated sequence.
+
+Operation claims prevent duplicate drivers and recover interrupted work after
+restart. Operator cancellation stops tracked work, holds an active stage and
+preserves committed receipts. Updated live production notes invalidate old rules
+at planning, approval, execution and cue boundaries. Physical completion and
+verified sponsor completion are separate fields in the shared contract.
 
 ## Build scope
 

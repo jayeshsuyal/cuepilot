@@ -15,7 +15,7 @@ from unittest.mock import AsyncMock, patch
 import httpx
 from fastapi.testclient import TestClient
 
-from cuepilot.api import create_app
+from cuepilot.api import DomainError, create_app
 
 
 def memory_result(note, provider="cognee"):
@@ -58,12 +58,21 @@ class AcceptanceFixture:
     def staged_live(self, speaker="maya", approve=False):
         # Construct queued state without POST /runs launching real RocketRide.
         run = self.store.create_run(speaker, "Introduction, presentation, holding.", "live")
-        self.store.add_trace(run["id"], memory_result(run["notes"]))
-        self.store.add_trace(run["id"], memory_result(run["notes"], "hydradb"))
-        self.store.add_trace(run["id"], validation_result(self.store.get_state("show")["revision"]))
+        for operation, result, proof_operation in (
+            ("ingest-memory", memory_result(run["notes"]), "ingest-memory"),
+            ("recall-recipe", memory_result(run["notes"], "hydradb"), "recall-recipe"),
+            ("validate-show", validation_result(self.store.get_state("show")["revision"]), None),
+        ):
+            key, _ = self.store.claim_operation(run["id"], operation)
+            self.store.add_trace(run["id"], result, proof_operation)
+            self.store.finish_operation(run["id"], key, result)
         run = self.store.plan(run["id"])
         if approve:
             run = self.store.approve(run["id"], run["plan"]["hash"])
+            key, _ = self.store.claim_operation(run["id"], "validate-show")
+            result = validation_result(self.store.get_state("show")["revision"])
+            self.store.add_trace(run["id"], result)
+            self.store.finish_operation(run["id"], key, result)
         return run
 
 
@@ -254,10 +263,76 @@ class SecurityAcceptanceTests(AcceptanceFixture, unittest.TestCase):
                         "Acknowledged retry ID was forgotten and advanced the next cue")
         self.assertEqual(self.store.get_run(run["id"])["nextStep"], 1)
 
+    def test_changed_production_rule_stops_an_active_live_procedure(self):
+        run = self.staged_live(approve=True)
+        self.store.claim_operation(run["id"], "execute")
+        self.assertEqual(self.cue(run, 0, "current-rule-intro").status_code, 200)
+        changed = self.store.create_run("ravi", "Changed rule: introduction then holding, never show presentation.", "live")
+        self.assertEqual(changed["status"], "queued")
+        self.assertEqual(self.store.get_state("show")["revision"], 2)
+        self.assertEqual(self.store.get_state("stage")["scene"], "holding")
+        self.assertEqual(self.store.get_run(run["id"])["status"], "blocked")
+        self.assertEqual(self.cue(run, 1, "stale-rule-presentation").status_code, 409)
+        self.assertEqual(len(self.store.get_run(run["id"])["receipts"]), 1)
+        inherited = self.store.create_run("alex", None, "live")
+        self.assertEqual(inherited["notes"], changed["notes"])
+
+    def test_obsolete_queued_rule_cannot_plan_against_fresh_show_revision(self):
+        run = self.store.create_run("maya", "Rule A", "live")
+        self.store.create_run("ravi", "Rule B", "live")
+        for operation, result, proof_operation in (
+            ("ingest-memory", memory_result(run["notes"]), "ingest-memory"),
+            ("recall-recipe", memory_result(run["notes"], "hydradb"), "recall-recipe"),
+            ("validate-show", validation_result(2), None),
+        ):
+            key, _ = self.store.claim_operation(run["id"], operation)
+            self.store.add_trace(run["id"], result, proof_operation)
+            self.store.finish_operation(run["id"], key, result)
+        with self.assertRaises(DomainError) as failure:
+            self.store.plan(run["id"])
+        self.assertEqual(failure.exception.code, "production_rules_changed")
+        self.assertEqual(self.store.get_run(run["id"])["receipts"], [])
+
 
 class ConcurrentExecutionAcceptanceTests(AcceptanceFixture, unittest.IsolatedAsyncioTestCase):
     async def asyncSetUp(self):
         self.setup_fixture()
+
+    async def test_operator_cancel_waits_for_active_rote_cleanup_even_after_last_cue(self):
+        for finish_cues in (False, True):
+            with self.subTest(completed=finish_cues):
+                run = self.staged_live(approve=True)
+                entered, cleaned = asyncio.Event(), asyncio.Event()
+
+                async def replay(*args):
+                    if finish_cues:
+                        for step in range(3):
+                            self.store.cue(run["id"], step, f"cancel-fixture-{step}")
+                    entered.set()
+                    try:
+                        await asyncio.Event().wait()
+                    except asyncio.CancelledError:
+                        await asyncio.sleep(0)
+                        cleaned.set()
+                        raise
+
+                async with httpx.AsyncClient(transport=httpx.ASGITransport(app=self.app), base_url="http://testserver") as client:
+                    with patch("cuepilot.integrations.rote.replay", side_effect=replay):
+                        request = asyncio.create_task(client.post("/api/v1/tools/execute", headers=self.bridge, json={"runId": run["id"]}))
+                        try:
+                            await asyncio.wait_for(entered.wait(), 2)
+                            response = await asyncio.wait_for(client.post(f"/api/v1/runs/{run['id']}/cancel", headers=self.operator), 2)
+                            self.assertEqual(response.status_code, 200)
+                            self.assertTrue(cleaned.is_set())
+                            current = response.json()
+                            self.assertEqual(current["operations"]["execute"]["status"], "failed")
+                            self.assertEqual(len(current["receipts"]), 3 if finish_cues else 0)
+                            self.assertEqual(current["status"], "completed" if finish_cues else "blocked")
+                            self.assertFalse(current["verifiedCompletion"])
+                            self.assertEqual(self.store.get_state("stage")["scene"], "holding")
+                        finally:
+                            request.cancel()
+                            await asyncio.gather(request, return_exceptions=True)
 
     async def test_overlapping_bridge_execute_claims_rote_once(self):
         run = self.staged_live(approve=True)
