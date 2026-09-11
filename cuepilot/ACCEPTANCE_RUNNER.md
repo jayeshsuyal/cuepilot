@@ -19,7 +19,13 @@ sponsor-setup/memory/.venv/bin/python -m cuepilot.acceptance live --timeout 600
 ```
 
 Each command performs stage actions. **Live consumes configured sponsor
-services/credits.** Implementation verification did not execute these commands.
+services/credits.** Full live acceptance executed and passed on September 11,
+2026 at 22:35 UTC: Maya learned, Ravi replayed the same package with new receipts,
+and Alex stopped after introduction. See [recorded evidence](INTEGRATIONS_ROTE.md)
+and [current sponsor readiness](../docs/sponsor-readiness.md). The learned active
+pointer remains in place, so a fresh `rote` or `live` acceptance run requires the
+explicit archival step above; the [recording guide](../docs/demo-recording.md)
+reuses that play without changing its evidence.
 Tokens come privately from the process environment, root `.env`, and
 `cuepilot/.env`, matching API precedence. Both operator and bridge tokens are
 required. No model keys are sent in acceptance requests. Requests target a fixed

@@ -41,9 +41,18 @@ The client never receives or stores the credential. Read-only GETs need no token
    the stage on holding and supplies the reason. Restore presentation readiness,
    create a recovery plan, approve it, and advance its three cues.
 5. **Live** creates a sponsor-backed preparation request. **Execute live** is
-   available only for a returned approved sponsor plan. The local setup currently
-   returns a RocketRide setup block; no completed sponsor rehearsal or Rote replay
-   is claimed. Inspect the exact returned provider evidence in the trace.
+   available only for a returned approved sponsor plan. Full live API acceptance
+   passed on the configured demo machine at 22:35 UTC on September 11, 2026;
+   see [sponsor readiness](../../docs/sponsor-readiness.md). A fresh checkout
+   still needs private service setup and a learned play. Inspect the returned
+   provider evidence in the trace.
+
+For the prepared live demo, select **Local API**, then **Live** after every page
+reload (the mode resets to **Practice**). Follow the
+[recording guide](../../docs/demo-recording.md) for Ravi replay and the Alex
+readiness block. Leave production notes unedited to reuse the backend's current
+rules. The button may read **Create recovery plan** when the displayed run is
+blocked or its plan is stale; it still uses the selected speaker and mode.
 
 A cue request ID is persisted in session storage before sending. A transport
 failure keeps that ID, including across reloads and a changed current-run view.

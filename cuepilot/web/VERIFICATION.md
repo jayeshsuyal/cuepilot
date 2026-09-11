@@ -1,6 +1,18 @@
 # Frontend verification — 2026-09-11
 
-## Final demo machine integration — 21:05 UTC
+## Current integrated status — 22:35 UTC
+
+Full live API acceptance subsequently passed: Maya learned, Ravi replayed the
+same package with three new receipts, and Alex stopped after one introduction
+receipt. See [sponsor readiness](../../docs/sponsor-readiness.md) for the retained
+evidence and working connections. The backend now passes 187 Python and 25
+RocketRide Node tests. The latest full Snyk scan at 22:36 UTC reported zero source
+findings and six open dependency advisories; see [SECURITY.md](../../SECURITY.md).
+The browser checks below used practice plans; live API acceptance does not
+retroactively make those browser checks live execution. Earlier credential and
+tunnel blockers below are historical.
+
+## Earlier demo machine integration — 21:05 UTC
 
 Omkar's `d9c6ee0` frontend was integrated with the reviewed backend. Production
 build and formatting pass. Nine transport tests and four operator tests pass;

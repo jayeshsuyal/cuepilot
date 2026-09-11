@@ -10,6 +10,8 @@ sequence for another speaker: **introduction -> presentation -> holding**.
 - **Backend:** [FastAPI service](cuepilot/api.py)
 - **Architecture and flow:** [current CuePilot diagrams](docs/cuepilot-architecture.md)
 - **Acceptance runs:** [Maya learn, Ravi replay, Alex interruption](cuepilot/ACCEPTANCE_RUNNER.md)
+- **Demo recording:** [60-second script and exact desk controls](docs/demo-recording.md)
+- **Pitch deck:** [six-slide PowerPoint with speaker notes](output/presentation/CuePilot-Demo.pptx)
 - **Public bridge:** [restricted authenticated proxy](cuepilot/BRIDGE.md)
 - **RocketRide:** [validated pipeline and execution gates](cuepilot/INTEGRATIONS_ROCKETRIDE.md)
 - **Cognee, HydraDB and Hotdata:** [adapter setup and verification gaps](cuepilot/INTEGRATIONS_MEMORY.md)
