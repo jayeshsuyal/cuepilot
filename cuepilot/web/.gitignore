@@ -1,0 +1,14 @@
+node_modules/
+dist/
+.env
+.env.*
+!.env.example
+*.local
+*.tsbuildinfo
+verification/*.json
+verification/*.png
+.snyk-cache/
+.local-api-venv/
+.local-runtime/
+__pycache__/
+verification/security-reports/
