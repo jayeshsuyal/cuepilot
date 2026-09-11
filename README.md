@@ -15,6 +15,7 @@ sequence for another speaker: **introduction -> presentation -> holding**.
 - **Cognee, HydraDB and Hotdata:** [adapter setup and verification gaps](cuepilot/INTEGRATIONS_MEMORY.md)
 - **Rote:** [recording evidence and replay handoff](cuepilot/INTEGRATIONS_ROTE.md)
 - **Security:** [scan baseline and open dependency findings](SECURITY.md)
+- **Current sponsor verification:** [connections and live evidence](docs/sponsor-readiness.md)
 - **Sponsor installation:** [setup notes](SPONSOR_SETUP.md)
 
 Jayesh owns the backend, sponsor adapters and shared contract. **oasb16 owns

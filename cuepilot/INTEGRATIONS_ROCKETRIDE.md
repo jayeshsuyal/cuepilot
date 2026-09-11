@@ -1,15 +1,24 @@
 # CuePilot / RocketRide staging integration
 
-This is a six-node `.pipe` and installed-SDK runner, not proof of an executed
-end-to-end show. The live staging schema was read on 2026-09-11. Authentication
-passed and the earlier pipeline snapshot validated with **0 errors and 0 warnings**;
-the account returned a positive compute-credit balance then. The integrated
-pipeline was revalidated at 20:47 UTC on September 11: **0 errors, 0 warnings**,
-model profile verified and positive compute credit. No task was started. The
-check remains blocked by `PUBLIC_HTTPS_BRIDGE_REQUIRED` and
-`OPENAI_MODEL_KEY_REQUIRED`; it does not establish live execution. Private report:
-`cuepilot/.runtime/rocketride-integration-validation.json`.
-`validation-2026-09-11.json` remains the older historical snapshot.
+The six-node `.pipe` and SDK runner use RocketRide staging, a native OpenAI
+model and an authenticated HTTPS bridge. On September 11, staging validation
+passed with zero errors and warnings, funded compute credit, and a working model
+key. Live preparation has completed all four actual bridge operations, including
+hosted Cognee graph reuse, Hydra recall, fresh Hotdata validation and planning.
+
+Full live acceptance passed at 22:35 UTC on September 11: Maya learned with three
+matched stage receipts and a verified Hydra outcome; Ravi replayed the same
+package with three new receipts; Alex's missing presentation interrupted replay
+after the intro and held the stage. The default supported model profile is
+`openai-4o`, which completed these flows. No raw model answer establishes success:
+the runner reads the canonical backend state and receipts.
+
+For Maya and Ravi, preparation observed five planning steps and four tool waves;
+execution observed four planning steps and three tool waves. These are host-event
+counts, not model usage. The measured execute phases took 28.366 and 41.214 seconds
+respectively, including startup and cleanup, so this run does not demonstrate
+lower end-to-end replay latency. The demonstrated improvement is reuse of the
+same recorded procedure without learning another package.
 
 ## Interfaces
 
@@ -47,9 +56,25 @@ success or fall back to practice mode silently. A result includes `ok`, `runId`,
 `operationDeadlineMs`, `maxElapsedMs`, and canonical status when available.
 Verified execution also includes `verifiedCompletion`, `canonicalVerified`,
 `receiptCount`, `receiptIds`, `planHash`, and `freshExecution`.
-It contains no raw model answer,
-task token or provider trace. Its `elapsedMs` includes SDK startup and cleanup;
+When the sponsor emits its fixed progress events, the report also includes
+`planningStepsObserved`, `toolWavesObserved`, and `plannerFinalization` (`done` or
+`synthesis`). These are bounded observations of host events, not token usage or a
+complete model-call count; missing fields mean unavailable. Arbitrary event text,
+thoughts, tool arguments, raw model answers, task tokens and provider traces are
+not retained. These observations cannot override canonical completion checks.
+Its `elapsedMs` includes SDK startup and cleanup;
 it is not a pure execution-duration benchmark.
+
+Connection setup retries at most three times with a fresh SDK client, only
+before any remote task exists. An explicit authentication rejection fails
+immediately. Task creation, task submission and stage-changing requests are never
+automatically retried after an uncertain response.
+
+Successful bridge responses expose fixed `completedOperation`, `runStatus` and
+`nextOperation` fields derived from fresh canonical state. Only the latest
+response describes progress. Successful plan and verification responses explicitly
+set `nextOperation` to null; earlier hints cannot keep the phase running. These
+hints guide the planner and do not replace backend prerequisite checks.
 
 ## Required configuration
 
@@ -61,7 +86,7 @@ it is not a pure execution-duration benchmark.
 | `CUEPILOT_BRIDGE_TOKEN` | Dedicated bridge bearer token, at least 24 characters |
 | `CUEPILOT_OPENAI_API_KEY` | Explicit key for the selected native OpenAI provider |
 | `ROCKETRIDE_OPENAI_KEY` | Supported existing alternative to the previous key |
-| `CUEPILOT_ROCKETRIDE_MODEL_PROFILE` | Optional; defaults to verified preset `openai-4o-mini` |
+| `CUEPILOT_ROCKETRIDE_MODEL_PROFILE` | Optional; defaults to verified preset `openai-4o` |
 
 The runner supports only preset profiles listed by both the saved and current
 staging schema. It does not infer a model key from Cognee's configuration or assume

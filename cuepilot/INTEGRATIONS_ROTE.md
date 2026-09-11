@@ -6,6 +6,26 @@ remains the authority for approval, current rules/readiness, ownership and recei
 
 ## Execution evidence and current limits
 
+Full five-sponsor **live acceptance passed at 22:35 UTC on September 11, 2026**:
+
+| Case | Run ID | Verified result |
+| --- | --- | --- |
+| Maya learn | `54d5c9a2-07f9-49db-b545-a0960be7b45a` | Three captured receipts matched the canonical API receipts. |
+| Ravi replay | `06413906-3b01-4b46-a2d4-a5c7f483f995` | Same package and proof, new speaker/run and three new matched receipts. |
+| Alex interruption | `6e337cff-97ee-4b6b-a98d-79f7f93e8d1e` | One intro receipt; missing presentation blocked replay and held the stage. |
+
+The learned package is `cuepilot-20260911T223253-df57366d`, proof SHA-256
+`7e857f6b45865946dd08e65ddff50ecd55727f3782aaaccffc7136fc9e7e584d`.
+Both completed runs include current Cognee/Hydra memory, fresh Hotdata queries,
+RocketRide orchestration and verified memory outcome writes. Restoring Alex's
+asset did not resume the stopped run. Private evidence:
+`cuepilot/.runtime/acceptance/20260911T223543.936639Z_fb0d972f96f14eb996f96ffb7669e690.json`.
+The active pointer now identifies this live package; the earlier practice pointer
+and all earlier packages were preserved. This proves reuse and interruption,
+not an end-to-end speed or cost reduction.
+
+### Earlier local acceptance
+
 Fresh proof-v2 acceptance **passed at 20:48 UTC on September 11, 2026** using
 actual Rote and the local API:
 
@@ -20,8 +40,8 @@ actual Rote and the local API:
 These runs used fixture plans and real Rote; they do **not** establish live
 Cognee/Hotdata/RocketRide execution. The private report is
 `cuepilot/.runtime/acceptance/20260911T204801.614383Z_adb1828fc4ef43f0a2a5dc4e7fca52ea.json`.
-The active practice proof cannot authorize a live memory recipe. Preserve/archive
-its active pointer before a fresh live acceptance; retain the immutable package.
+That practice proof cannot authorize a live memory recipe. Its active pointer was
+archived before the live acceptance above; the immutable package was retained.
 
 ### Historical rehearsal
 

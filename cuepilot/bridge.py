@@ -18,6 +18,7 @@ HERE = Path(__file__).resolve().parent
 UPSTREAM = "http://127.0.0.1:8787"
 REQUEST_LIMIT = 4096
 REQUEST_BODY_TIMEOUT = 5
+PROGRESS_TIMEOUT = 5
 RESPONSE_LIMIT = 65536
 TOOL_NAMES = frozenset({"ingest-memory", "recall-recipe", "validate-show", "plan", "execute", "verify"})
 RUN_STATUSES = frozenset({"queued", "needs_approval", "approved", "running", "completed", "blocked", "failed"})
@@ -162,6 +163,46 @@ def tool_projection(data, run_id):
     if "receipts" in data:
         summary["receipts"] = receipt_projection(data["receipts"], run_id)
     return summary
+
+
+def operation_completed(operation, data):
+    """A route name or an HTTP success alone cannot establish tool completion."""
+    if data.get("status") in ("blocked", "failed") or data.get("ok") is False:
+        return False
+    if operation == "plan":
+        return data.get("status") == "needs_approval"
+    if operation == "verify":
+        return data.get("ok") is True
+    return data.get("status") == "verified"
+
+
+def progress_projection(operation, data, canonical, run_id):
+    """Return fixed operation names from fresh local state, never provider text."""
+    run = run_projection(canonical, run_id)
+    status = run["status"]
+    progress = {"runStatus": status}
+    # A cached successful result must not advance a run that was later stopped.
+    if status in ("blocked", "failed"):
+        return progress
+    progress["completedOperation"] = operation
+    next_operation = None
+    if status == "queued":
+        next_operation = {"ingest-memory": "recall-recipe", "recall-recipe": "validate-show",
+                          "validate-show": "plan"}.get(operation)
+    elif status == "approved" and operation == "validate-show":
+        next_operation = "execute"
+    elif status == "completed" and operation == "execute" and data.get("provider") == "rote":
+        operations = canonical.get("operations")
+        execution = operations.get("execute") if isinstance(operations, dict) else None
+        if (isinstance(execution, dict) and execution.get("status") == "verified"
+                and len(run["receipts"]) == 3):
+            next_operation = "verify"
+    if next_operation is not None:
+        progress["nextOperation"] = next_operation
+    elif ((operation == "plan" and status == "needs_approval")
+          or (operation == "verify" and status == "completed")):
+        progress["nextOperation"] = None
+    return progress
 
 
 def unique_object(pairs):
@@ -310,7 +351,16 @@ def create_app(bridge_token=None, transport=None):
     async def tool(operation: str, request: Request):
         payload = await request_body(request)
         data = await upstream_request("POST", f"/api/v1/tools/{operation}", bridge_token, payload, transport)
-        return tool_projection(data, payload["runId"])
+        run_id = payload["runId"]
+        result = tool_projection(data, run_id)
+        if operation_completed(operation, data):
+            try:
+                async with asyncio.timeout(PROGRESS_TIMEOUT):
+                    canonical = await upstream_request("GET", f"/api/v1/runs/{run_id}", bridge_token, None, transport)
+            except TimeoutError:
+                raise BridgeError("upstream_timeout", 504) from None
+            result.update(progress_projection(operation, data, canonical, run_id))
+        return result
 
     return app
 

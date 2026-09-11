@@ -14,19 +14,29 @@ never become fixtures or sponsor success.
 
 The [official Cloud client](https://github.com/topoteretes/cognee/blob/main/cognee/api/v1/serve/cloud_client.py)
 confirms multipart file field `data`, form fields `datasetName` / `custom_prompt`,
-and `X-Api-Key`. The adapter calls the blocking
+and `X-Api-Key`. The adapter explicitly requests `run_in_background=false` at the
 [remember endpoint](https://docs.cognee.ai/api-reference/remember/remember),
-requires `status=completed` without an explicit error, validates the returned
-dataset UUID and optional dataset name, then fetches its
+validates the returned dataset UUID and optional dataset name, and requires
+completion without an explicit error before fetching its
 [dataset graph](https://docs.cognee.ai/api-reference/datasets/get-dataset-graph).
+If Cloud returns `running`, it polls that exact dataset's `cognify_pipeline`
+[status](https://docs.cognee.ai/api-reference/datasets/get-dataset-status) every two
+seconds for at most 60 seconds. Only `completed` or
+`DATASET_PROCESSING_COMPLETED` permits export; errors, unknown statuses and timeout
+cannot publish a Hydra recipe. Resuming an already returned receipt requires no
+second upload.
 A valid completion can have ID-only `items`; missing item names or content hashes
-are not themselves failures. `running`, malformed completion and unresolved
+are not themselves failures. Unconfirmed `running`, malformed completion and unresolved
 exports cannot verify a recipe. It uses HTTP directly and does not import or
 change Cognee's global SDK session.
 
 The graph must actually contain directed introduction → presentation → holding
 relationships and unavailable-speaker/presentation → holding fallbacks. The small
 explicit vocabulary in `_prove_template` is deliberately limited to this segment.
+Only `Entity` nodes can prove these rules; exported `EntityType` taxonomy nodes
+remain stored but cannot supply or duplicate an entity rule. The observed exact
+Cloud labels `unavailablespeaker` and `unavailablepresentation` are accepted
+alongside their spaced forms; no fuzzy label matching is used.
 An extraction prompt suggests vocabulary but cannot prove a plan. Missing rules,
 duplicate recognized entities, contradictory ordering, and unavailable → another
 scene fallbacks block even when the expected edges also exist. Canonical node and
@@ -135,6 +145,10 @@ requests a one-hour best-effort expiry, loads one immutable CSV snapshot with
 explicit column types, and verifies the synchronous load receipt's connection,
 schema, table and row count. This avoids numeric-looking IDs being inferred as
 numbers. An HTTP 202 background acceptance cannot establish publication.
+The load idempotency key hashes the returned database ID, schema, table and
+complete load payload. Reusing the same CSV after a process restart is a new
+operation when its destination changes; a snapshot-only key caused a confirmed
+HTTP 409 and is no longer used.
 
 A [fresh synchronous query](https://www.hotdata.dev/docs/api-reference/query)
 checks selected speaker readiness and its matching presentation. The result must

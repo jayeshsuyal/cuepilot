@@ -45,6 +45,22 @@ report `ok: true`; receipts must form an ordered cue prefix with matching scenes
 and strictly increasing stage revisions. Notes, trace/evidence payloads,
 raw provider messages and arbitrary upstream response headers are withheld.
 
+After a successful tool result, the bridge reads that same run from the fixed
+local API with an additional five-second bound. `runStatus`, `completedOperation`
+and, when required, `nextOperation` describe actual workflow progress using fixed
+operation names. A later blocked or failed run suppresses completion and next-step
+hints, even if the tool returned a cached success. Preparation advances through
+ingest, recall, validation and plan; approved validation advances to execution;
+verified Rote execution with three canonical receipts advances to verification.
+Successful plan responses with canonical `needs_approval`, and successful verify
+responses with canonical `completed`, explicitly return `nextOperation: null`.
+That terminal value clears earlier hints: the orchestrator must use only the
+latest response's progress metadata. Cached success on a blocked or failed run
+still omits both `completedOperation` and `nextOperation`.
+These fields expose no dynamic URLs or private evidence and do not authorize
+skipping any API prerequisite. Malformed state or a timed-out progress read fails
+closed and requires reconciliation.
+
 Upstream total deadlines are 190 seconds for ingestion, 130 seconds for execution
 and Hotdata validation, and 30 seconds for other calls, with a 3-second connect
 bound. The caller must set a compatible timeout; the bridge cannot extend an

@@ -124,7 +124,11 @@ class BridgeTests(unittest.TestCase):
         for name in TOOL_NAMES:
             response = self.client.post(f"/api/v1/tools/{name}", headers=AUTH, json={"runId": RUN_ID})
             self.assertEqual(response.status_code, 200, response.text)
-        self.assertEqual(len(self.requests), 8)
+        # Five verified tool results also read their same canonical local run.
+        self.assertEqual(len(self.requests), 13)
+        self.assertEqual(sum(request.method == "POST" for request in self.requests), 6)
+        self.assertEqual(sum(request.method == "GET" and request.url.path == f"/api/v1/runs/{RUN_ID}"
+                             for request in self.requests), 6)
         for request in self.requests:
             self.assertEqual(request.url.scheme, "http")
             self.assertEqual(request.url.host, "127.0.0.1")
@@ -395,6 +399,181 @@ class BridgeTests(unittest.TestCase):
         response = self.client.get("/api/v1/health", headers=AUTH)
         self.assertEqual(response.status_code, 502, response.text)
         self.assertNotIn(PRIVATE, response.text)
+
+
+class BridgeProgressTests(unittest.TestCase):
+    """Success hints are derived from the addressed tool and fresh canonical run."""
+
+    def setUp(self):
+        self.requests = []
+        self.run = upstream_run()
+        self.run.update(status="queued", receipts=[])
+        self.tool_result = {"status": "verified", "runId": RUN_ID, "evidence": PRIVATE,
+                            "completedOperation": PRIVATE, "nextOperation": PRIVATE, "runStatus": PRIVATE}
+        self.handler = self.progress_response
+        self.client = TestClient(create_app(bridge_token=TOKEN, transport=httpx.MockTransport(self.dispatch)))
+
+    def tearDown(self):
+        self.client.close()
+
+    def dispatch(self, request):
+        self.requests.append(request)
+        return self.handler(request)
+
+    def progress_response(self, request):
+        if request.method == "POST":
+            return httpx.Response(200, json=self.tool_result)
+        self.assertEqual(request.method, "GET")
+        self.assertEqual(request.url.path, f"/api/v1/runs/{RUN_ID}")
+        return httpx.Response(200, json=self.run)
+
+    def call_tool(self, operation):
+        self.requests.clear()
+        return self.client.post(f"/api/v1/tools/{operation}", headers=AUTH, json={"runId": RUN_ID})
+
+    def assert_progress(self, operation, status, next_operation=None, *, terminal=False):
+        self.run["status"] = status
+        response = self.call_tool(operation)
+        self.assertEqual(response.status_code, 200, response.text)
+        data = response.json()
+        self.assertEqual(data["completedOperation"], operation)
+        self.assertEqual(data["runStatus"], status)
+        if terminal:
+            self.assertIn("nextOperation", data)
+            self.assertIsNone(data["nextOperation"])
+        elif next_operation is None:
+            self.assertNotIn("nextOperation", data)
+        else:
+            self.assertEqual(data["nextOperation"], next_operation)
+        self.assertEqual([(r.method, r.url.path) for r in self.requests], [
+            ("POST", f"/api/v1/tools/{operation}"), ("GET", f"/api/v1/runs/{RUN_ID}"),
+        ])
+        self.assertNotIn(PRIVATE, response.text)
+        self.assertNotIn("operations", data)
+        self.assertNotIn("evidence", data)
+
+    def test_preparation_and_execution_validation_have_exact_next_operation(self):
+        for operation, status, following in (("ingest-memory", "queued", "recall-recipe"),
+                                             ("recall-recipe", "queued", "validate-show"),
+                                             ("validate-show", "queued", "plan"),
+                                             ("validate-show", "approved", "execute")):
+            with self.subTest(operation=operation, status=status):
+                self.assert_progress(operation, status, following)
+
+    def test_preparation_hints_cannot_cross_approval_or_running_boundaries(self):
+        for operation in ("ingest-memory", "recall-recipe", "validate-show"):
+            for status in ("needs_approval", "running", "completed"):
+                with self.subTest(operation=operation, status=status):
+                    self.assert_progress(operation, status)
+        for operation in ("ingest-memory", "recall-recipe"):
+            self.assert_progress(operation, "approved")
+
+    def test_execute_requires_rote_and_canonical_verified_complete_receipts_for_next(self):
+        self.tool_result.update(provider="rote", operation="replay")
+        self.run["receipts"] = receipt_prefix()
+        self.run["operations"] = {"execute": {"status": "verified", "result": {"evidence": PRIVATE}}}
+        self.assert_progress("execute", "completed", "verify")
+        self.tool_result["provider"] = "local"
+        self.assert_progress("execute", "completed")
+        self.tool_result["provider"] = "rote"
+        for execution in (None, [], {}, {"status": "running"}, {"status": "failed"}):
+            self.run["operations"]["execute"] = execution
+            self.assert_progress("execute", "completed")
+        self.run["operations"] = {"execute": {"status": "verified"}}
+        for length in range(3):
+            self.run["receipts"] = receipt_prefix(length)
+            self.assert_progress("execute", "completed")
+
+    def test_plan_and_verify_explicitly_clear_the_previous_next_operation(self):
+        self.tool_result = upstream_run()
+        self.tool_result["status"] = "needs_approval"
+        self.assert_progress("plan", "needs_approval", terminal=True)
+        self.assert_progress("plan", "approved")
+        self.tool_result = {"ok": True, "runId": RUN_ID, "status": "completed"}
+        self.assert_progress("verify", "completed", terminal=True)
+        self.assert_progress("verify", "running")
+
+    def test_terminal_tool_cached_success_on_stopped_run_omits_all_progress_hints(self):
+        for operation, tool_result in (("plan", upstream_run() | {"status": "needs_approval"}),
+                                       ("verify", {"ok": True, "status": "completed", "runId": RUN_ID})):
+            for status in ("blocked", "failed"):
+                with self.subTest(operation=operation, status=status):
+                    self.tool_result = tool_result
+                    self.run["status"] = status
+                    response = self.call_tool(operation)
+                    self.assertEqual(response.status_code, 200, response.text)
+                    self.assertEqual(response.json()["runStatus"], status)
+                    self.assertNotIn("completedOperation", response.json())
+                    self.assertNotIn("nextOperation", response.json())
+
+    def test_nonverified_or_contradictory_tool_result_has_no_progress_or_canonical_read(self):
+        for operation in TOOL_NAMES:
+            for result in ({"status": "blocked", "ok": True}, {"status": "failed", "ok": True},
+                           {"status": "fixture"}, {"status": "verified", "ok": False}):
+                with self.subTest(operation=operation, result=result):
+                    self.tool_result = result
+                    response = self.call_tool(operation)
+                    self.assertEqual(response.status_code, 200, response.text)
+                    for name in ("completedOperation", "nextOperation", "runStatus"):
+                        self.assertNotIn(name, response.json())
+                    self.assertEqual(len(self.requests), 1)
+
+    def test_cached_success_cannot_advance_a_now_blocked_or_failed_run(self):
+        for operation in ("ingest-memory", "recall-recipe", "validate-show", "execute"):
+            for status in ("blocked", "failed"):
+                with self.subTest(operation=operation, status=status):
+                    self.run["status"] = status
+                    response = self.call_tool(operation)
+                    self.assertEqual(response.status_code, 200, response.text)
+                    self.assertEqual(response.json()["runStatus"], status)
+                    self.assertNotIn("completedOperation", response.json())
+                    self.assertNotIn("nextOperation", response.json())
+
+    def test_malformed_or_wrong_canonical_run_fails_closed_after_success(self):
+        for changed in ({"status": None}, {"status": "verified"}, {"status": {"queued": True}},
+                        {"id": RECEIPT_ID}, {"receipts": None}):
+            with self.subTest(changed=changed):
+                self.run = upstream_run() | changed
+                response = self.call_tool("ingest-memory")
+                self.assertEqual(response.status_code, 502, response.text)
+                self.assertEqual(response.json()["detail"]["code"], "upstream_invalid_response")
+                self.assertIs(response.json()["reconciliationRequired"], True)
+                self.assertNotIn("completedOperation", response.json())
+                self.assertNotIn("nextOperation", response.json())
+                self.assertNotIn(PRIVATE, response.text)
+
+    def test_canonical_read_failure_remains_uncertain_and_private(self):
+        def unavailable(request):
+            if request.method == "POST":
+                return httpx.Response(200, json=self.tool_result)
+            return httpx.Response(500, json={"detail": PRIVATE})
+        self.handler = unavailable
+        response = self.call_tool("ingest-memory")
+        self.assertEqual(response.status_code, 502, response.text)
+        self.assertIs(response.json()["reconciliationRequired"], True)
+        self.assertNotIn(PRIVATE, response.text)
+
+    def test_canonical_progress_timeout_never_repeats_successful_post(self):
+        cancelled = []
+
+        async def hanging_get(request):
+            if request.method == "POST":
+                return httpx.Response(200, json=self.tool_result)
+            try:
+                await asyncio.Event().wait()
+            finally:
+                cancelled.append(True)
+
+        self.handler = hanging_get
+        with patch("cuepilot.bridge.PROGRESS_TIMEOUT", 0.005):
+            response = self.call_tool("execute")
+        self.assertEqual(response.status_code, 504, response.text)
+        self.assertEqual(response.json()["detail"]["code"], "upstream_timeout")
+        self.assertIs(response.json()["reconciliationRequired"], True)
+        self.assertNotIn("completedOperation", response.json())
+        self.assertNotIn("nextOperation", response.json())
+        self.assertEqual([request.method for request in self.requests], ["POST", "GET"])
+        self.assertEqual(cancelled, [True])
 
 
 class RequestBodyDeadlineTests(unittest.IsolatedAsyncioTestCase):

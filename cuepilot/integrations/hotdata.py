@@ -164,9 +164,14 @@ async def validate_show(show: dict, speaker_id: str) -> dict:
                             or database.get("default_schema") != "main"):
                         raise HotdataError("Hotdata database creation did not confirm the expected catalog and identifiers.")
                     database_id = database["id"]
+                    # The same CSV in a newly created database is a different
+                    # load. Bind retries to destination, data and load options.
+                    load_payload = {"mode": "replace", "data": data, "format": "csv", "columns": SNAPSHOT_COLUMNS,
+                                    "async": False}
+                    load_key = hashlib.sha256(json.dumps([database_id, "main", "cuepilot_state", load_payload],
+                                                         sort_keys=True, separators=(",", ":")).encode()).hexdigest()
                     loaded = await _request(client, "POST", f"v1/databases/{database_id}/schemas/main/tables/cuepilot_state/loads",
-                                            json={"mode": "replace", "data": data, "format": "csv", "columns": SNAPSHOT_COLUMNS,
-                                                  "async": False, "idempotency_key": snapshot_hash})
+                                            json=load_payload | {"idempotency_key": load_key})
                     _loaded_snapshot(loaded, database, row_count)
                     snapshot = {"database_id": database_id, "valid_until": valid_until}
                     records.append(_record("verified", "publish_show_snapshot", {"database_id": database_id, "expires_after": "1h",

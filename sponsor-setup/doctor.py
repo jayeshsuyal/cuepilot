@@ -24,7 +24,7 @@ ANSI = re.compile(r"\x1b\[[0-9;]*[A-Za-z]")
 def env_from_files():
     """Read simple dotenv assignments without evaluating shell expansions."""
     values = dict(os.environ)
-    for path in (PROJECT / ".env", SETUP / "hotdata" / ".env"):
+    for path in (PROJECT / ".env", PROJECT / "cuepilot" / ".env", SETUP / "hotdata" / ".env"):
         if not path.is_file():
             continue
         for line in path.read_text().splitlines():

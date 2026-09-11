@@ -599,6 +599,12 @@ def create_app(db_path=None, operator_token=None, bridge_token=None):
                 value = report.get(key)
                 if isinstance(value, (int, float, bool)):
                     evidence[key] = value
+            for key in ("planningStepsObserved", "toolWavesObserved"):
+                value = report.get(key)
+                if type(value) is int and 0 <= value <= 12:
+                    evidence[key] = value
+            if report.get("plannerFinalization") in ("done", "synthesis"):
+                evidence["plannerFinalization"] = report["plannerFinalization"]
             evidence["blockers"] = [code for code in report.get("blockers", []) if isinstance(code, str) and re.fullmatch(r"[A-Z0-9_]{1,100}", code)] if isinstance(report.get("blockers"), list) else []
             store.add_trace(run_id, {"provider": "rocketride", "status": status, "operation": phase,
                                       "reason": None if status == "verified" else "RocketRide execution needs configuration or failed; inspect its local check report.",

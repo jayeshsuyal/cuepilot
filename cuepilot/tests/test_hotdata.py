@@ -46,6 +46,7 @@ class HotdataTests(unittest.IsolatedAsyncioTestCase):
         self.query_results = []
         self.load_result = None
         self.create_result = None
+        self.idempotency_targets = {}
         self.hook = None
         hotdata._SNAPSHOTS.clear()
         self.environment = patch.dict(os.environ, {"HOTDATA_API_KEY": "offline-test-key", "HOTDATA_WORKSPACE": "work-test"}, clear=True)
@@ -78,6 +79,10 @@ class HotdataTests(unittest.IsolatedAsyncioTestCase):
                 "default_connection_id": "conn-test", "expires_at": "2026-09-12T00:00:00Z", "created": True,
             })
         if request.url.path.endswith("/loads"):
+            load_key = json.loads(request.content)["idempotency_key"]
+            previous_target = self.idempotency_targets.setdefault(load_key, request.url.path)
+            if previous_target != request.url.path:
+                return httpx.Response(409, json={"error": "Idempotency key used for a different destination"})
             if self.load_result:
                 return self.load_result
             return httpx.Response(200, json={"connection_id": "conn-test", "schema_name": "main", "table_name": "cuepilot_state",
@@ -227,6 +232,29 @@ class HotdataTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(third["status"], "blocked")
         self.assertEqual(self.database_count, 3)
         self.assertEqual(len({json.loads(request.content)["idempotency_key"] for request in self.requests if request.url.path.endswith("/loads")}), 3)
+
+    async def test_restart_loads_same_snapshot_into_new_database_with_distinct_idempotency(self):
+        first = await hotdata.validate_show(self.show, "maya")
+        self.assertEqual(first["status"], "verified")
+        # Simulate a process restart: remote completed loads survive, local
+        # snapshot references do not. A reused load key would return HTTP 409.
+        hotdata._SNAPSHOTS.clear()
+        second = await hotdata.validate_show(self.show, "maya")
+        self.assertEqual(second["status"], "verified")
+        self.assertEqual(self.database_count, 2)
+        creates = [json.loads(r.content) for r in self.requests if r.url.path == "/v1/databases"]
+        self.assertNotEqual(creates[0]["name"], creates[1]["name"])
+        loads = [json.loads(r.content) for r in self.requests if r.url.path.endswith("/loads")]
+        self.assertEqual(loads[0]["data"], loads[1]["data"])
+        self.assertNotEqual(loads[0]["idempotency_key"], loads[1]["idempotency_key"])
+        for result, expected_database in ((first, "dbid-1"), (second, "dbid-2")):
+            evidence = result["records"][-1]["evidence"]
+            self.assertEqual(evidence["database_id"], expected_database)
+            self.assertFalse(evidence["snapshot_reused"])
+            self.assertEqual(result["records"][0]["operation"], "publish_show_snapshot")
+        self.assertEqual(first["records"][-1]["evidence"]["snapshot_sha256"],
+                         second["records"][-1]["evidence"]["snapshot_sha256"])
+        self.assertEqual(self.paths().count("/v1/query"), 2)
 
     async def test_cache_expiry_and_workspace_or_token_change_force_new_publication(self):
         await hotdata.validate_show(self.show, "maya")

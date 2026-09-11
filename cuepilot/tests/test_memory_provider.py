@@ -5,7 +5,7 @@ from email.parser import BytesParser
 import hashlib
 import json
 import unittest
-from unittest.mock import patch
+from unittest.mock import AsyncMock, patch
 
 import httpx
 
@@ -53,14 +53,18 @@ def multipart_fields(request):
 
 
 class CogneeExtractionTests(unittest.IsolatedAsyncioTestCase):
-    async def extract(self, response, graph=None):
+    async def extract(self, response, graph=None, statuses=(), *, public=False):
         requests = []
         real_client = httpx.AsyncClient
+        status_responses = iter(statuses)
 
         def respond(request):
             requests.append(request)
             if request.method == "POST" and request.url.path == "/api/v1/remember":
                 return httpx.Response(200, json=response(request) if callable(response) else response)
+            if request.method == "GET" and request.url.path == "/api/v1/datasets/status":
+                self.assertEqual(dict(request.url.params), {"dataset": DATASET_ID, "pipeline": "cognify_pipeline"})
+                return httpx.Response(200, json=next(status_responses, {DATASET_ID: "running"}))
             if request.method == "GET" and request.url.path == f"/api/v1/datasets/{DATASET_ID}/graph":
                 return httpx.Response(200, json=graph if graph is not None else exported_graph())
             raise AssertionError(f"Unexpected provider request: {request.method} {request.url.path}")
@@ -70,7 +74,10 @@ class CogneeExtractionTests(unittest.IsolatedAsyncioTestCase):
 
         self.requests = requests
         with patch.object(memory, "_cloud_config", return_value=("https://offline.cognee.ai", "offline-test-key")), \
-                patch.object(memory.httpx, "AsyncClient", side_effect=client_factory):
+                patch.object(memory.httpx, "AsyncClient", side_effect=client_factory), \
+                patch.object(memory, "COGNEE_POLL_INTERVAL", 0.001):
+            if public:
+                return await memory.ingest_note(NOTE, "show-provider-test")
             return await memory._extract_graph(NOTE, "show-provider-test")
 
     async def test_completed_remember_uploads_note_and_exports_the_returned_dataset(self):
@@ -92,6 +99,7 @@ class CogneeExtractionTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(fields["data"].get_content_type(), "text/plain")
         self.assertTrue(fields["data"].get_filename().endswith(".txt"))
         self.assertEqual(fields["datasetName"].get_payload(decode=True).decode(), provenance["dataset_name"])
+        self.assertEqual(fields["run_in_background"].get_payload(decode=True), b"false")
         self.assertIn("Do not add a fact", fields["custom_prompt"].get_payload(decode=True).decode())
 
         self.assertCountEqual(graph["nodes"], exported_graph()["nodes"])
@@ -176,6 +184,82 @@ class CogneeExtractionTests(unittest.IsolatedAsyncioTestCase):
             await self.extract({"status": "completed", "dataset_id": DATASET_ID}, graph)
         self.assertTrue(caught.exception.blocked)
         self.assertEqual(len(self.requests), 2)
+
+    async def test_running_polls_same_dataset_to_completed_before_export(self):
+        graph, provenance = await self.extract(
+            {"status": "running", "dataset_id": DATASET_ID},
+            statuses=[{}, {DATASET_ID: "DATASET_PROCESSING_STARTED"},
+                      {DATASET_ID: "DATASET_PROCESSING_COMPLETED"}],
+        )
+        self.assertEqual([r.url.path for r in self.requests], [
+            "/api/v1/remember", *(["/api/v1/datasets/status"] * 3),
+            f"/api/v1/datasets/{DATASET_ID}/graph",
+        ])
+        self.assertEqual(provenance["completion_status"], "DATASET_PROCESSING_COMPLETED")
+        self.assertIs(provenance["ingest_completed"], True)
+        self.assertEqual(memory._prove_template(graph)["supported_template"], memory.TEMPLATE)
+
+    async def test_running_completion_supports_documented_short_status(self):
+        _, provenance = await self.extract(
+            {"status": "running", "dataset_id": DATASET_ID}, statuses=[{DATASET_ID: "completed"}],
+        )
+        self.assertEqual(provenance["completion_status"], "completed")
+
+    async def test_failure_or_unknown_status_cannot_export_or_publish_hydra(self):
+        for status in ("failed", "DATASET_PROCESSING_ERRORED", "unrecognized", {"status": "completed"}):
+            with self.subTest(status=status), \
+                    patch.object(memory, "_read_recipe", new=AsyncMock(return_value=None)), \
+                    patch.object(memory, "_persist_graph", new=AsyncMock()) as persist:
+                result = await self.extract({"status": "running", "dataset_id": DATASET_ID},
+                                            statuses=[{DATASET_ID: status}], public=True)
+                self.assertEqual(result["status"], "blocked")
+                self.assertFalse(any(r.url.path.endswith("/graph") for r in self.requests))
+                persist.assert_not_awaited()
+
+    async def test_timeout_or_other_dataset_completion_cannot_publish_hydra(self):
+        for status in ({DATASET_ID: "running"}, {"other-dataset": "DATASET_PROCESSING_COMPLETED"}):
+            with self.subTest(status=status), \
+                    patch.object(memory, "_read_recipe", new=AsyncMock(return_value=None)), \
+                    patch.object(memory, "_persist_graph", new=AsyncMock()) as persist, \
+                    patch.object(memory, "COGNEE_POLL_TIMEOUT", 0.01):
+                result = await self.extract({"status": "running", "dataset_id": DATASET_ID},
+                                            statuses=[status] * 100, public=True)
+                self.assertEqual(result["status"], "blocked")
+                self.assertIn("bounded wait", result["reason"])
+                self.assertFalse(any(r.url.path.endswith("/graph") for r in self.requests))
+                persist.assert_not_awaited()
+
+    async def test_error_or_malformed_status_envelope_cannot_publish_hydra(self):
+        for response in ([], {DATASET_ID: "completed", "error": "private detail"},
+                         {DATASET_ID: {"cognify_pipeline": "completed"}}):
+            with self.subTest(response=response), \
+                    patch.object(memory, "_read_recipe", new=AsyncMock(return_value=None)), \
+                    patch.object(memory, "_persist_graph", new=AsyncMock()) as persist:
+                result = await self.extract({"status": "running", "dataset_id": DATASET_ID},
+                                            statuses=[response], public=True)
+                self.assertEqual(result["status"], "blocked")
+                self.assertNotIn("private detail", result["reason"])
+                self.assertFalse(any(r.url.path.endswith("/graph") for r in self.requests))
+                persist.assert_not_awaited()
+
+    async def test_resume_uses_original_receipt_and_never_uploads_again(self):
+        requests = []
+
+        def respond(request):
+            requests.append(request)
+            self.assertEqual(request.method, "GET")
+            if request.url.path == "/api/v1/datasets/status":
+                return httpx.Response(200, json={DATASET_ID: "DATASET_PROCESSING_COMPLETED"})
+            self.assertEqual(request.url.path, f"/api/v1/datasets/{DATASET_ID}/graph")
+            return httpx.Response(200, json=exported_graph())
+
+        async with httpx.AsyncClient(base_url="https://offline.cognee.ai/", transport=httpx.MockTransport(respond)) as client:
+            _, provenance = await memory._finish_extraction(
+                client, {"status": "running", "dataset_id": DATASET_ID, "dataset_name": "existing-dataset"},
+                "existing-dataset", NOTE, "show-provider-test",
+            )
+        self.assertEqual(len(requests), 2)
+        self.assertEqual(provenance["dataset_name"], "existing-dataset")
 
 
 class CogneeGraphProofTests(unittest.TestCase):
@@ -300,6 +384,45 @@ class CogneeGraphProofTests(unittest.TestCase):
             {"source": "entity-either", "target": "entity-hold", "label": "fallback_to"},
             {"source": "entity-either", "target": "entity-slides", "label": "fallback_to"},
         ])
+        self.assert_blocked(graph)
+
+    def test_cloud_compact_entities_and_duplicate_taxonomy_are_preserved(self):
+        graph = exported_graph()
+        for node in graph["nodes"][3:]:
+            node["label"] = node["label"].lower().replace(" ", "")
+        graph["nodes"].extend([
+            {"id": "type-no-speaker", "label": "unavailablespeaker", "type": "EntityType", "properties": {}},
+            {"id": "type-no-slides", "label": "unavailablepresentation", "type": "EntityType", "properties": {}},
+        ])
+        graph["edges"].append({"source": "entity-no-speaker", "target": "type-no-speaker", "label": "is_a"})
+        normalized = memory._normalize_graph(graph)
+        proof = memory._prove_template(normalized)
+        self.assertEqual(len(normalized["nodes"]), 7)
+        self.assertEqual(len(normalized["edges"]), 5)
+        self.assertCountEqual(proof["fallback_edges"], graph["edges"][2:4])
+        self.assertCountEqual(normalized["nodes"], graph["nodes"])
+
+    def test_taxonomy_or_document_edges_cannot_replace_any_entity_rule(self):
+        for index in range(5):
+            for node_type in ("EntityType", "DocumentChunk", ""):
+                with self.subTest(index=index, node_type=node_type):
+                    graph = exported_graph()
+                    graph["nodes"][index]["type"] = node_type
+                    self.assert_blocked(graph)
+
+    def test_compact_aliases_do_not_allow_fuzzy_or_duplicate_entities(self):
+        for label in ("unavailablepresentations", "speakerunavailable", "missingpresentations"):
+            with self.subTest(label=label):
+                graph = exported_graph()
+                graph["nodes"][4]["label"] = label
+                self.assert_blocked(graph)
+        graph = exported_graph()
+        graph["nodes"].append({"id": "another-unavailable", "label": "unavailablespeaker",
+                               "type": "Entity", "properties": {}})
+        self.assert_blocked(graph)
+        graph = exported_graph()
+        graph["nodes"][3]["label"] = "unavailablespeaker"
+        graph["edges"].append({"source": "entity-no-speaker", "target": "entity-slides", "label": "fallback_to"})
         self.assert_blocked(graph)
 
 

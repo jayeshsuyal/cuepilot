@@ -21,6 +21,8 @@ import httpx
 ROOT = Path(__file__).resolve().parents[2]
 MAX_GRAPH_BYTES = 2_000_000
 TEMPLATE = "speaker-segment-v1"
+COGNEE_POLL_TIMEOUT = 60
+COGNEE_POLL_INTERVAL = 2
 
 
 def _record(provider, status, operation, evidence=None, reason=None):
@@ -123,11 +125,14 @@ def _prove_template(graph):
         "intro": {"intro", "introduction", "speaker introduction", "speaker intro"},
         "presentation": {"presentation", "speaker presentation", "presentation slides"},
         "holding": {"holding", "holding card", "holding screen"},
-        "speaker_unavailable": {"unavailable speaker", "speaker unavailable", "missing speaker"},
-        "presentation_unavailable": {"unavailable presentation", "presentation unavailable", "missing presentation"},
+        "speaker_unavailable": {"unavailable speaker", "speaker unavailable", "missing speaker", "unavailablespeaker"},
+        "presentation_unavailable": {"unavailable presentation", "presentation unavailable", "missing presentation", "unavailablepresentation"},
         "either_unavailable": {"speaker or presentation unavailable", "unavailable speaker or presentation"},
     }
-    kinds = {node["id"]: next((kind for kind, labels in aliases.items() if _words(node["label"]) in labels), None)
+    # Cognee also exports EntityType taxonomy nodes with the same names. Only
+    # relationships between extracted Entity instances can establish cue rules.
+    kinds = {node["id"]: next((kind for kind, labels in aliases.items()
+                              if node.get("type") == "Entity" and _words(node["label"]) in labels), None)
              for node in graph["nodes"]}
     if any(count > 1 for kind, count in Counter(kinds.values()).items() if kind is not None):
         raise ProviderError("Cognee graph has ambiguous duplicate cue or availability entities.", blocked=True)
@@ -167,23 +172,56 @@ async def _extract_graph(note, source_id):
     async with httpx.AsyncClient(base_url=base + "/", headers={"X-Api-Key": key},
                                 timeout=httpx.Timeout(90, connect=10), follow_redirects=False, trust_env=False) as client:
         result = await _http_json(client, "POST", "api/v1/remember",
-                                 data={"datasetName": dataset_name, "custom_prompt": prompt},
+                                 data={"datasetName": dataset_name, "custom_prompt": prompt,
+                                       "run_in_background": "false"},
                                  files={"data": ("text_" + _digest(note) + ".txt", note.encode(), "text/plain")})
-        if not isinstance(result, dict) or result.get("status") != "completed":
-            raise ProviderError("Cognee did not report completed ingestion; no graph was verified.", blocked=True)
-        if result.get("error"):
-            raise ProviderError("Cognee reported an ingestion error; no graph was verified.", blocked=True)
-        if "dataset_name" in result and result["dataset_name"] != dataset_name:
-            raise ProviderError("Cognee ingestion returned a different dataset name than the uploaded note.", blocked=True)
-        try:
-            dataset_id = str(UUID(str(result["dataset_id"])))
-        except (KeyError, ValueError, TypeError):
-            raise ProviderError("Cognee ingestion did not return a dataset UUID for graph export.", blocked=True) from None
-        graph = _normalize_graph(await _http_json(client, "GET", f"api/v1/datasets/{dataset_id}/graph"))
+        return await _finish_extraction(client, result, dataset_name, note, source_id)
+
+
+async def _wait_for_dataset(client, dataset_id):
+    """Cloud can return running even for a blocking remember request."""
+    pending = {"pending", "running", "DATASET_PROCESSING_INITIATED", "DATASET_PROCESSING_STARTED"}
+    try:
+        async with asyncio.timeout(COGNEE_POLL_TIMEOUT):
+            while True:
+                result = await _http_json(client, "GET", "api/v1/datasets/status",
+                                          params={"dataset": dataset_id, "pipeline": "cognify_pipeline"})
+                if not isinstance(result, dict) or result.get("error"):
+                    raise ProviderError("Cognee returned unsupported dataset completion evidence.", blocked=True)
+                status = result.get(dataset_id)
+                if isinstance(status, str) and status in {"completed", "DATASET_PROCESSING_COMPLETED"}:
+                    return status
+                if status is not None and (not isinstance(status, str) or status not in pending):
+                    raise ProviderError("Cognee dataset processing failed or returned an unsupported status; no graph was verified.", blocked=True)
+                await asyncio.sleep(COGNEE_POLL_INTERVAL)
+    except TimeoutError:
+        raise ProviderError("Cognee dataset completion was not confirmed within the bounded wait; no graph was verified.", blocked=True) from None
+
+
+async def _finish_extraction(client, result, dataset_name, note, source_id):
+    """Finish the returned dataset without uploading a second copy of the note."""
+    if not isinstance(result, dict) or result.get("status") not in ("completed", "running"):
+        raise ProviderError("Cognee did not report completed or running ingestion; no graph was verified.", blocked=True)
+    if result.get("error"):
+        raise ProviderError("Cognee reported an ingestion error; no graph was verified.", blocked=True)
+    if "dataset_name" in result and result["dataset_name"] != dataset_name:
+        raise ProviderError("Cognee ingestion returned a different dataset name than the uploaded note.", blocked=True)
+    try:
+        dataset_id = str(UUID(str(result["dataset_id"])))
+    except (KeyError, ValueError, TypeError):
+        raise ProviderError("Cognee ingestion did not return a dataset UUID for graph export.", blocked=True) from None
+    completion_status = result["status"]
+    if completion_status == "running":
+        completion_status = await _wait_for_dataset(client, dataset_id)
+    graph = _normalize_graph(await _http_json(client, "GET", f"api/v1/datasets/{dataset_id}/graph"))
     provenance = {"provider": "cognee", "dataset_id": dataset_id, "dataset_name": dataset_name,
                   "source_id": source_id, "note_sha256": _digest(note), "graph_sha256": _digest(_json(graph)),
                   "export_endpoint": "GET /api/v1/datasets/{dataset_id}/graph",
-                  "ingest_completed": True, "exported_at": datetime.now(timezone.utc).isoformat()}
+                  "ingest_completed": True, "completion_status": completion_status,
+                  "exported_at": datetime.now(timezone.utc).isoformat()}
+    if result["status"] == "running":
+        provenance["completion_endpoint"] = "GET /api/v1/datasets/status"
+        provenance["completion_pipeline"] = "cognify_pipeline"
     return graph, provenance
 
 

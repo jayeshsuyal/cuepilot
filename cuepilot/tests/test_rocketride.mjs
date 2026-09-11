@@ -40,9 +40,10 @@ function harness(t, options = {}) {
     connect: async function () {
       events.push('connect'); sdkTimeout = this._requestTimeout;
       assert.deepEqual(this._env, {});
+      await options.connect?.();
       this._billing = { getCreditBalance: async () => ({ balances: { tokens: 1 } }) };
     },
-    getService: async () => ({ Pipe: { schema: { properties: { profile: { enum: ['openai-4o-mini'] } } } } }),
+    getService: async () => ({ Pipe: { schema: { properties: { profile: { enum: ['openai-4o'] } } } } }),
     validate: options.validate ?? (async () => ({ errors: [], warnings: [] })),
     getOrgId: () => 'fake-organization',
     use: async params => {
@@ -69,6 +70,7 @@ test('offline validation and phase whitelists start no task and never substitute
   assert.deepEqual(h.events, []);
   for (const phase of ['prepare', 'execute']) {
     const pipe = await buildRocketRidePipeline({ phase, env });
+    assert.equal(pipe.components.find(node => node.provider === 'llm_openai').config.profile, 'openai-4o');
     const http = pipe.components.find(node => node.provider === 'tool_http_request');
     const whitelist = new RegExp(http.config.urlWhitelist[0].whitelistPattern);
     assert.equal(http.config.allowPOST, true);
@@ -112,6 +114,56 @@ test('completed shortcut validates evidence but does not claim fresh execution o
   assert.equal(result.freshExecution, false);
   assert.equal(result.taskStartAttempted, false);
   assert.equal(h.starts.length, 0);
+});
+
+test('transient connection failures retry before starting exactly one task', async t => {
+  let attempts = 0;
+  const h = harness(t, { connect: async () => {
+    if (++attempts < 3) throw new Error('temporary connection failure');
+  } });
+  const result = await runRocketRide({ env, runId, phase: 'execute' });
+  assert.equal(result.ok, true);
+  assert.equal(attempts, 3);
+  assert.equal(h.starts.length, 1);
+  assert.equal(h.events.filter(event => event === 'send').length, 1);
+  assert.equal(h.events.filter(event => event === 'disconnect').length, 3);
+});
+
+test('credential rejection fails before task creation without authentication retries', async t => {
+  const h = harness(t, { connect: async () => {
+    const error = new Error(env.ROCKETRIDE_APIKEY);
+    error.name = 'AuthenticationException';
+    throw error;
+  } });
+  const result = await runRocketRide({ env, runId, phase: 'execute' });
+  assert.equal(result.ok, false);
+  assert.equal(result.taskStartAttempted, false);
+  assert.ok(result.blockers.includes('STAGING_AUTH_REJECTED'));
+  assert.equal(h.events.filter(event => event === 'connect').length, 1);
+  assert.equal(h.starts.length, 0);
+  assert.equal(JSON.stringify(result).includes(env.ROCKETRIDE_APIKEY), false);
+});
+
+test('progress retains bounded host counts only and cannot override canonical failure', async t => {
+  harness(t, { final: approved(), send: async (_token, _data, _info, _mime, progress) => {
+    await progress('thinking', { message: 'Planning step 1...', token: env.CUEPILOT_OPENAI_API_KEY });
+    await progress('thinking', { message: 'Planning step 1...' });
+    await progress('thinking', { message: 'Step 1 complete' });
+    await progress('thinking', { message: 'Planning step 2...' });
+    await progress('thinking', { message: 'Planning step 999...' });
+    await progress('thinking', { message: `Planning step 3... ${env.CUEPILOT_BRIDGE_TOKEN}` });
+    await progress('answer', { message: 'Step 2 complete' });
+    await progress('thinking', { message: 'Generating final answer...' });
+    return { result_types: { output: 'answers' }, answers: env.CUEPILOT_OPENAI_API_KEY };
+  } });
+  const result = await runRocketRide({ env, runId, phase: 'execute' });
+  assert.equal(result.ok, false);
+  assert.equal(result.planningStepsObserved, 2);
+  assert.equal(result.toolWavesObserved, 1);
+  assert.equal(result.plannerFinalization, 'done');
+  for (const secret of Object.values(env).filter(value => value.length === 64)) {
+    assert.equal(JSON.stringify(result).includes(secret), false);
+  }
 });
 
 for (const [name, mutate, blocker] of [

@@ -1,5 +1,33 @@
 # Backend acceptance and release gates
 
+## Current verification — September 11, 22:35 UTC
+
+The updated backend passes **187 Python tests and 25 RocketRide Node tests**.
+This includes delayed Cognee completion, provenance-preserving graph reuse,
+canonical bridge progress, redacted planner counters, Hotdata upload idempotency
+across process restarts, and connection retries restricted to the period before
+task creation. First-party Snyk Code completed with zero findings at 22:36 UTC;
+six dependency advisories remain open in
+[SECURITY.md](../SECURITY.md). No numeric quality or security score is claimed.
+
+Hosted Cognee extraction and the full graph's persistence/read-back in local Hydra
+have passed. Fresh Hotdata queries have passed. The authenticated temporary HTTPS
+bridge and model key are now working. **The full five-sponsor live gate passed:**
+Maya learned with three matched receipts, Ravi replayed the same package with
+three new receipts, and Alex's unavailable presentation stopped replay after one
+intro receipt and held the stage. Completed runs include fresh execution
+validation, actual RocketRide/Rote work and verified Hydra outcome writes.
+The private acceptance report is
+`cuepilot/.runtime/acceptance/20260911T223543.936639Z_fb0d972f96f14eb996f96ffb7669e690.json`.
+The recorded procedure was reused; this measurement does not establish lower
+end-to-end replay latency or cost.
+
+Omkar's frontend is integrated. Its 13 tests, production build and real local
+practice browser checks passed earlier; those checks do not establish live sponsor
+execution. See [sponsor readiness](sponsor-readiness.md) for the current connection
+state. The sections below retain historical review and test evidence; older
+missing-key and unreviewed-frontend statements are superseded by this section.
+
 ## Integration result — September 11, 20:48 UTC
 
 The coordinator integrated the fixes below and the memory/Rote/RocketRide work.

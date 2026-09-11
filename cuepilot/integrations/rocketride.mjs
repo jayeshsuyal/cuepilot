@@ -76,7 +76,7 @@ function settings(env) {
   // Do not silently use Cognee's key, another provider's key, or assume platform billing.
   const modelKey = env.CUEPILOT_OPENAI_API_KEY || env.ROCKETRIDE_OPENAI_KEY;
   if (!modelKey || /\s/.test(modelKey)) errors.push('OPENAI_MODEL_KEY_REQUIRED');
-  const profile = env.CUEPILOT_ROCKETRIDE_MODEL_PROFILE || 'openai-4o-mini';
+  const profile = env.CUEPILOT_ROCKETRIDE_MODEL_PROFILE || 'openai-4o';
   return { uri, apiKey, base, bridgeToken, modelKey, profile, errors };
 }
 
@@ -119,15 +119,22 @@ export async function buildRocketRidePipeline({ phase = 'prepare', env = process
 
 async function connect(cfg, signal, phase = 'prepare') {
   if (!cfg.uri || !cfg.apiKey) fail('STAGING_AUTH_CONFIGURATION_REQUIRED');
-  // SDK send() awaits DataPipe.close() using this same request timeout. A short
-  // default would silently truncate the entire model/tool execution to 20s.
-  const client = new RocketRideClient({ uri: cfg.uri, auth: cfg.apiKey, persist: false, env: {}, requestTimeout: ROCKETRIDE_LIMITS[phase].sendMs + 5_000 });
-  try {
-    await bounded(() => client.connect(cfg.apiKey, { timeout: 10_000 }), 15_000, 'STAGING_CONNECT_TIMEOUT', signal);
-    return client;
-  } catch (error) {
-    await bounded(() => client.disconnect(), 5_000, 'DISCONNECT_TIMEOUT').catch(() => {});
-    throw error;
+  for (let attempt = 0; attempt < 3; attempt++) {
+    signal?.throwIfAborted();
+    // Retry only connection setup before any task exists. Never retry use/send
+    // or a stage-changing call after an uncertain response.
+    // send() awaits DataPipe.close() using this same long request timeout.
+    const client = new RocketRideClient({ uri: cfg.uri, auth: cfg.apiKey, persist: false, env: {}, requestTimeout: ROCKETRIDE_LIMITS[phase].sendMs + 5_000 });
+    try {
+      await bounded(() => client.connect(cfg.apiKey, { timeout: 10_000 }), 15_000, 'STAGING_CONNECT_TIMEOUT', signal);
+      return client;
+    } catch (error) {
+      await bounded(() => client.disconnect(), 5_000, 'DISCONNECT_TIMEOUT').catch(() => {});
+      signal?.throwIfAborted();
+      if (error?.name === 'AuthenticationException') fail('STAGING_AUTH_REJECTED');
+      if (attempt === 2) throw error;
+      await new Promise(resolve => setTimeout(resolve, 250 * (attempt + 1)));
+    }
   }
 }
 
@@ -334,7 +341,20 @@ export async function runRocketRide({ runId, phase = 'prepare', env = process.en
     stage = 'pipeline_send';
     const question = new Question({ expectJson: true });
     question.addQuestion(JSON.stringify({ runId, phase }));
-    const result = await bounded(() => client.send(taskToken, JSON.stringify(question.toDict()), {}, 'application/rocketride-question'), limits.sendMs, 'PIPELINE_RESPONSE_UNCERTAIN', operationSignal);
+    const planningSteps = new Set();
+    const completedWaves = new Set();
+    const observeProgress = async (type, data) => {
+      // Accept only fixed host progress messages. Never retain thoughts, tool
+      // arguments, answers, arbitrary event payloads or credential-bearing text.
+      if (type !== 'thinking' || typeof data?.message !== 'string') return;
+      const planning = /^Planning step ([1-9]|1[0-2])\.\.\.$/.exec(data.message);
+      const completed = /^Step ([1-9]|1[0-2]) complete$/.exec(data.message);
+      if (planning) { planningSteps.add(Number(planning[1])); report.planningStepsObserved = planningSteps.size; }
+      if (completed) { completedWaves.add(Number(completed[1])); report.toolWavesObserved = completedWaves.size; }
+      if (data.message === 'Generating final answer...') report.plannerFinalization = 'done';
+      if (data.message === 'Synthesizing final answer...') report.plannerFinalization = 'synthesis';
+    };
+    const result = await bounded(() => client.send(taskToken, JSON.stringify(question.toDict()), {}, 'application/rocketride-question', observeProgress), limits.sendMs, 'PIPELINE_RESPONSE_UNCERTAIN', operationSignal);
     report.answerReceived = Boolean(result?.result_types && Object.values(result.result_types).includes('answers'));
     // Raw answers and traces can contain credentials echoed by a provider: neither is returned or logged.
   } catch (error) {
