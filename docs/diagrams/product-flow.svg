@@ -1,0 +1,70 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="960" height="448" viewBox="0 0 960 448" role="img" aria-labelledby="title desc">
+  <title id="title">CuePilot product flow</title>
+  <desc id="desc">Choose a speaker and prepare a plan, review and approve it, run the cues, then review execution evidence. The sequence is introduction, presentation, holding. Every cue checks current rules, revision, readiness, order and ownership. A missing presentation holds and blocks the active sequence; recovery requires a new approved plan.</desc>
+  <defs>
+    <marker id="arrow" markerWidth="8" markerHeight="8" refX="6" refY="4" orient="auto" markerUnits="userSpaceOnUse">
+      <path d="M1 1 5 4 1 7" fill="none" stroke="#8291a8" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+    </marker>
+    <style>
+      text { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+      .eyebrow { fill: #a8b4c6; font-size: 12px; font-weight: 600; letter-spacing: 1.6px; }
+      .heading { fill: #f0f3f8; font-size: 22px; font-weight: 650; }
+      .body { fill: #a8b4c6; font-size: 16px; }
+      .step { fill: #f2b65f; font-size: 12px; font-weight: 700; letter-spacing: 1px; }
+      .scene { fill: #edf1f7; font-size: 18px; font-weight: 550; }
+      .line { fill: none; stroke: #8291a8; stroke-width: 1.6; marker-end: url(#arrow); }
+    </style>
+  </defs>
+  <rect x="1" y="1" width="958" height="446" rx="18" fill="#0c121c" stroke="#293447"/>
+  <text x="28" y="36" class="eyebrow">ONE APPROVED CUE AT A TIME</text>
+
+  <!-- Four short steps replace the branching control-flow diagram. -->
+  <g fill="#151e2c" stroke="#2d3a4e">
+    <rect x="28" y="58" width="208" height="132" rx="12"/>
+    <rect x="260" y="58" width="208" height="132" rx="12"/>
+    <rect x="492" y="58" width="208" height="132" rx="12"/>
+    <rect x="724" y="58" width="208" height="132" rx="12"/>
+  </g>
+  <path d="M240 124H254" class="line"/>
+  <path d="M472 124H486" class="line"/>
+  <path d="M704 124H718" class="line"/>
+  <g>
+    <text x="48" y="85" class="step">01 / PREPARE</text>
+    <text x="48" y="116" class="heading">Choose a speaker</text>
+    <text x="48" y="145" class="body">Set notes and mode.</text>
+    <text x="48" y="167" class="body">Create the cue plan.</text>
+    <text x="280" y="85" class="step">02 / APPROVE</text>
+    <text x="280" y="116" class="heading">Review the plan</text>
+    <text x="280" y="145" class="body">Inspect cues + evidence.</text>
+    <text x="280" y="167" class="body">Approve this exact plan.</text>
+    <text x="512" y="85" class="step">03 / EXECUTE</text>
+    <text x="512" y="116" class="heading">Run the cues</text>
+    <text x="512" y="145" class="body">Validate, then advance.</text>
+    <text x="512" y="167" class="body">Save a receipt per cue.</text>
+    <text x="744" y="85" class="step">04 / VERIFY</text>
+    <text x="744" y="116" class="heading">Review the run</text>
+    <text x="744" y="145" class="body">Inspect receipts and</text>
+    <text x="744" y="167" class="body">execution evidence.</text>
+  </g>
+
+  <text x="28" y="225" class="eyebrow">THE STAGE SEQUENCE</text>
+  <g fill="#151e2c" stroke="#2d3a4e">
+    <rect x="28" y="241" width="280" height="56" rx="10"/>
+    <rect x="340" y="241" width="280" height="56" rx="10"/>
+    <rect x="652" y="241" width="280" height="56" rx="10"/>
+  </g>
+  <path d="M314 269H334" class="line"/>
+  <path d="M626 269H646" class="line"/>
+  <g text-anchor="middle" class="scene">
+    <text x="168" y="276">Introduction</text>
+    <text x="480" y="276">Presentation</text>
+    <text x="792" y="276">Holding</text>
+  </g>
+  <text x="480" y="324" text-anchor="middle" class="body">Every cue: rules · revision · readiness · order · ownership</text>
+
+  <rect x="28" y="348" width="904" height="72" rx="10" fill="#251e16" stroke="#665035"/>
+  <rect x="48" y="372" width="6" height="22" rx="1.5" fill="#f2b65f"/>
+  <rect x="60" y="372" width="6" height="22" rx="1.5" fill="#f2b65f"/>
+  <text x="84" y="377" fill="#f4c887" font-size="18" font-weight="600">Missing presentation → hold and block</text>
+  <text x="84" y="402" class="body">Resolve the cause, then create and approve a new plan.</text>
+</svg>

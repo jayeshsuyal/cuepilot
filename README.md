@@ -29,42 +29,14 @@ never invents playback progress or sponsor success.
 
 ## Product flow
 
-```mermaid
-flowchart TD
-    Select["Choose speaker, notes and mode"] --> Plan["Create plan<br/>Practice fixture or Live sponsor preparation"]
-    Plan --> Preview["Preview returned cues and evidence"]
-    Plan -->|Preparation blocked| Blocked["Holding with reason<br/>Sequence blocked"]
-    Preview --> Approve["Operator approves exact plan hash"]
-    Approve --> Execute["Next cue in Practice<br/>Execute live through Rote"]
-    Execute --> Guard{"Current rules, revision,<br/>readiness and cue order valid?"}
-    Guard -->|Yes| Commit["Commit next scene and receipt<br/>Introduction → presentation → holding"]
-    Commit --> More{"More cues?"}
-    More -->|Yes: next cue| Guard
-    More -->|No| Review["Review receipts and live verification"]
-    Guard -->|No| Blocked
-    Blocked --> Recover["Resolve the cause<br/>Create and approve a new plan"]
-    Recover --> Select
-```
+![Prepare a speaker's plan, review and approve it, run introduction → presentation → holding, then review evidence. Every cue is checked; a missing presentation holds and blocks the active sequence until a new plan is approved.](docs/diagrams/product-flow.svg)
 
 Live execution checks every cue automatically. Practice advances one cue per
 operator action. Restoring an asset never resumes an invalidated plan.
 
 ## System diagram
 
-```mermaid
-flowchart TD
-    Desk["Operator desk /<br/>React + TypeScript"] --> Proxy["Vite :5173<br/>Server-only operator token"]
-    Stage["Projected stage /stage"] -->|Read stage every 500 ms| Proxy
-    Proxy -->|/api/v1| API["FastAPI :8787<br/>Approval, readiness and ordered cue guards"]
-    API --> Store[("SQLite<br/>Plans, claims, receipts and stage")]
-    API -->|Prepare and execute| RR["RocketRide<br/>Orchestration"]
-    RR -->|HTTPS + bridge token| Bridge["Restricted bridge :8788"]
-    Bridge -->|Allowed tools only| API
-    API <-->|Extract and recall rules| Memory["Cognee + HydraDB<br/>Rule graph, provenance and outcomes"]
-    API <-->|Fresh readiness checks| Hotdata["hotdata.dev<br/>Current show snapshot"]
-    API -->|Approved sequence| Rote["Rote<br/>Learn or replay a procedure"]
-    Rote -->|Ordered cue requests| API
-```
+![The operator desk controls the CuePilot API through an authenticated local proxy; the projected stage reads its state. The API owns stage changes and SQLite receipts. Live connections provide orchestration through the restricted bridge, rule memory, readiness checks, and Rote cue requests.](docs/diagrams/system-overview.svg)
 
 The API owns stage truth. Each cue transaction checks approval, show revision,
 asset readiness, order and ownership before writing its receipt. Retrying the

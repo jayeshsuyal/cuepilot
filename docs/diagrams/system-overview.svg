@@ -1,0 +1,77 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="960" height="562" viewBox="0 0 960 562" role="img" aria-labelledby="title desc">
+  <title id="title">CuePilot system overview</title>
+  <desc id="desc">The operator desk controls CuePilot through a local authenticated proxy. The API alone commits stage changes and stores plans, claims and receipts in SQLite. The projected stage reads the current scene. In Live mode, RocketRide orchestrates tools through a restricted HTTPS bridge; Cognee and HydraDB supply rules and memory; Hotdata checks readiness; Rote learns or replays ordered cue requests. Practice uses local fixture plans.</desc>
+  <defs>
+    <marker id="arrow" markerWidth="8" markerHeight="8" refX="6" refY="4" orient="auto-start-reverse" markerUnits="userSpaceOnUse">
+      <path d="M1 1 5 4 1 7" fill="none" stroke="#8291a8" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+    </marker>
+    <style>
+      text { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+      .eyebrow { fill: #a8b4c6; font-size: 12px; font-weight: 600; letter-spacing: 1.6px; }
+      .heading { fill: #f0f3f8; font-size: 22px; font-weight: 650; }
+      .body { fill: #a8b4c6; font-size: 16px; }
+      .small { fill: #a8b4c6; font-size: 14px; }
+      .service { fill: #edf1f7; font-size: 19px; font-weight: 600; }
+      .line { fill: none; stroke: #8291a8; stroke-width: 1.6; }
+    </style>
+  </defs>
+  <rect x="1" y="1" width="958" height="560" rx="18" fill="#0c121c" stroke="#293447"/>
+  <text x="28" y="36" class="eyebrow">ONE STAGE. ONE SOURCE OF TRUTH.</text>
+
+  <!-- Local control stays above the Live-only connections. -->
+  <rect x="28" y="98" width="236" height="130" rx="12" fill="#151e2c" stroke="#2d3a4e"/>
+  <text x="48" y="132" class="heading">Operator desk</text>
+  <text x="48" y="164" class="body">Prepare · approve · control</text>
+  <text x="48" y="199" class="small">Authenticated local proxy</text>
+  <path d="M270 163H318" class="line" marker-end="url(#arrow)"/>
+
+  <rect x="324" y="66" width="312" height="228" rx="14" fill="#211e1a" stroke="#9a713a"/>
+  <text x="348" y="99" fill="#f2b65f" font-size="12" font-weight="700" letter-spacing="1.4">STAGE AUTHORITY</text>
+  <text x="348" y="135" fill="#fff0d9" font-size="28" font-weight="650">CuePilot API</text>
+  <text x="348" y="168" class="body">Checks every cue.</text>
+  <text x="348" y="193" class="body">Commits scenes + receipts.</text>
+  <rect x="344" y="216" width="272" height="58" rx="8" fill="#151a22" stroke="#454335"/>
+  <text x="362" y="240" fill="#e0e6ef" font-size="16" font-weight="600">SQLite</text>
+  <text x="362" y="260" class="small">Plans · claims · receipts · stage</text>
+
+  <rect x="696" y="98" width="236" height="130" rx="12" fill="#151e2c" stroke="#2d3a4e"/>
+  <text x="716" y="132" class="heading">Projected stage</text>
+  <text x="716" y="164" class="body">Displays the current scene</text>
+  <text x="716" y="199" class="small">Reads authoritative API state</text>
+  <path d="M642 163H690" class="line" marker-end="url(#arrow)"/>
+
+  <!-- Bidirectional connections show calls and results, not a runtime order. -->
+  <path d="M480 300V336M132 336H828" class="line"/>
+  <path d="M480 330V300" class="line" marker-end="url(#arrow)"/>
+  <path d="M132 336V356" class="line" marker-end="url(#arrow)"/>
+  <path d="M364 336V356" class="line" marker-end="url(#arrow)"/>
+  <path d="M596 336V356" class="line" marker-end="url(#arrow)"/>
+  <path d="M828 336V356" class="line" marker-end="url(#arrow)"/>
+  <text x="28" y="309" class="eyebrow">LIVE CONNECTIONS</text>
+  <text x="932" y="309" text-anchor="end" class="small">Calls + verified results</text>
+
+  <g fill="#151e2c" stroke="#2d3a4e">
+    <rect x="28" y="362" width="208" height="132" rx="12"/>
+    <rect x="260" y="362" width="208" height="132" rx="12"/>
+    <rect x="492" y="362" width="208" height="132" rx="12"/>
+    <rect x="724" y="362" width="208" height="132" rx="12"/>
+  </g>
+  <text x="48" y="394" class="service">RocketRide</text>
+  <text x="48" y="425" class="body">Orchestrates tools</text>
+  <text x="48" y="455" class="small">Calls back through the</text>
+  <text x="48" y="476" class="small">restricted HTTPS bridge</text>
+  <text x="280" y="394" class="service">Cognee + HydraDB</text>
+  <text x="280" y="425" class="body">Rules + memory</text>
+  <text x="280" y="455" class="small">Graph provenance</text>
+  <text x="280" y="476" class="small">and verified outcomes</text>
+  <text x="512" y="394" class="service">Hotdata</text>
+  <text x="512" y="425" class="body">Fresh readiness</text>
+  <text x="512" y="455" class="small">Current speaker, asset</text>
+  <text x="512" y="476" class="small">and show revision</text>
+  <text x="744" y="394" class="service">Rote</text>
+  <text x="744" y="425" class="body">Learn / replay</text>
+  <text x="744" y="455" class="small">Requests ordered cues;</text>
+  <text x="744" y="476" class="small">the API commits them.</text>
+
+  <text x="480" y="532" text-anchor="middle" class="body">Practice uses local fixture plans. Live requires verified sponsor evidence.</text>
+</svg>
