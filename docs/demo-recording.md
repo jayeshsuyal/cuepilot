@@ -8,19 +8,27 @@ idle provider waits with a visible “wait shortened” caption.
 
 ## Exact controls
 
-1. Select **Local API**, then **Live** under **New run mode**. Every page reload
-   resets the mode to **Practice**, so select **Live** again after reloading.
+1. Select **Local API**, then confirm **Live** under **New run mode**. Local API
+   defaults to Live for a new browser profile and remembers your explicit mode
+   choice across reloads. The **Viewing Live run** or **Viewing Practice run**
+   label describes the selected run; **New run mode** applies to the next run.
+   Changing modes or reloading does not execute any cues.
 2. Select **Ravi Shah**. Leave **Production notes** unedited so the backend keeps
    its current learned rules. Confirm Ravi's **Presentation** switch is on.
 3. Click **Create live run**. If the currently displayed run is blocked or stale,
    the same button reads **Create recovery plan**; confirm **Live** remains
    selected. Wait for the sponsor plan, inspect its three cues, then click
-   **Approve plan**.
-4. Click **Execute live** once. Let introduction → presentation → holding finish.
+   **Approve plan**. If another run is unfinished, select it in **Run history**
+   and finish or cancel it before creating Ravi's run.
+4. Click **Execute live sequence** once. Let introduction → presentation →
+   holding finish.
    Capture **3 / 3 cues accepted** and **Live execution verified**, including
    verified Rote/Hydra outcome and final RocketRide evidence. Physical cues alone
-   do not establish live verification. Capture Ravi's trace before creating Alex;
-   the desk has no history picker.
+   do not establish live verification. **Segment finished** with the stage
+   holding is expected after the third cue. **Configuration revision** counts
+   show setup changes, not cues. Use **Run history** to return to Ravi's trace
+   after creating Alex; selecting history changes the viewed evidence while
+   the preview and projected output continue to show the current stage.
 5. Select **Alex Rivera**, keep **Live** selected, and turn **Presentation** off
    **before** creating his run. Click **Create live run** (or **Create recovery
    plan**). Wait for the readiness block: the stage stays holding and the new run

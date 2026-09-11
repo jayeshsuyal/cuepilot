@@ -293,12 +293,25 @@ details[open] summary {
   align-items: flex-end;
   flex-direction: column;
   gap: 5px;
+  max-width: 240px;
+  text-align: right;
 }
 .show-meta strong {
   font-family: ui-monospace, monospace;
-  font-size: 26px;
+  font-size: 13px;
   color: #d0d7c5;
   font-weight: 400;
+  line-height: 1.5;
+}
+.show-meta small {
+  font-size: 10px;
+  line-height: 1.5;
+  color: var(--muted);
+}
+.show-meta > span:not(.eyebrow) {
+  font-size: 11px;
+  line-height: 1.5;
+  color: #c0c9b5;
 }
 .desk-grid {
   display: grid;
@@ -307,6 +320,7 @@ details[open] summary {
   align-items: start;
 }
 .panel {
+  min-width: 0;
   background: var(--surface);
   border: 1px solid var(--line);
   border-radius: 8px;
@@ -586,6 +600,7 @@ h2 {
 }
 .program-column {
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   gap: 20px;
   min-width: 0;
 }
@@ -606,6 +621,7 @@ h2 {
 }
 .program {
   container-type: inline-size;
+  width: 100%;
   position: relative;
   isolation: isolate;
   overflow: hidden;
@@ -617,6 +633,7 @@ h2 {
   display: flex;
   flex-direction: column;
   min-height: 250px;
+  min-width: 0;
 }
 .program::before {
   content: "";
@@ -647,6 +664,8 @@ h2 {
   align-items: center;
   justify-content: space-between;
   padding: 4cqw 4.8cqw 0;
+  gap: 12px;
+  flex-shrink: 0;
 }
 .program-brand {
   display: flex;
@@ -707,6 +726,7 @@ h2 {
   color: #c2c7b3;
   margin-top: 2.4cqw;
   line-height: 1.45;
+  overflow-wrap: anywhere;
 }
 .program-body > p:not(.program-subtitle):not(.program-reason) {
   font-size: 2cqw;
@@ -722,6 +742,7 @@ h2 {
   border-left: 2px solid #c7975b;
   padding-left: 2cqw;
   max-width: 94%;
+  overflow-wrap: anywhere;
 }
 .program-bottom {
   display: flex;
@@ -732,6 +753,8 @@ h2 {
   font-family: ui-monospace, monospace;
   font-size: 1.1cqw;
   letter-spacing: 1.1px;
+  gap: 12px;
+  flex-shrink: 0;
 }
 .program-rule {
   width: 48px;
@@ -1295,9 +1318,7 @@ h2 {
   color: #4c6040;
 }
 .stale-overlay {
-  position: absolute;
-  bottom: 0;
-  left: 0;
+  position: relative;
   width: 100%;
   background: #3b281bef;
   border-top: 1px solid #bc8a5f;
@@ -1307,6 +1328,7 @@ h2 {
   gap: 5px;
   color: #f5c79d;
   font-size: 12px;
+  flex-shrink: 0;
 }
 .stale-overlay strong {
   font-size: 14px;
@@ -1371,15 +1393,6 @@ h2 {
 }
 .program-full .stale-overlay strong {
   font-size: 2.5vw;
-}
-.stage-connection-message {
-  position: absolute;
-  bottom: 8vh;
-  left: 8vw;
-  right: 8vw;
-  font-size: clamp(16px, 1.5vw, 25px);
-  line-height: 1.6;
-  color: #f4c695;
 }
 .spin {
   animation: spin 1s linear infinite;
@@ -1519,6 +1532,9 @@ h2 {
   .show-meta .eyebrow {
     font-size: 7px;
     letter-spacing: 1px;
+  }
+  .show-meta {
+    max-width: 140px;
   }
   .desk-grid {
     grid-template-columns: minmax(0, 1fr);
@@ -1706,7 +1722,7 @@ h2 {
     margin-bottom: 10px;
   }
   .preview-section .program {
-    max-height: 300px;
+    aspect-ratio: auto;
     min-height: 240px;
   }
   .plan-content {
@@ -1760,12 +1776,18 @@ h2 {
   border: 1px solid var(--line);
   background: var(--surface);
   border-radius: 6px;
+  flex-wrap: wrap;
+}
+.cue-control > div {
+  flex: 1 1 180px;
+  min-width: 0;
 }
 .cue-control strong {
   display: block;
   font-size: 12px;
   font-weight: 550;
   margin-top: 5px;
+  line-height: 1.5;
 }
 .cue-control .eyebrow {
   font-size: 8px;
@@ -1773,6 +1795,43 @@ h2 {
 .cue-control .button {
   min-width: 130px;
   flex-shrink: 0;
+  margin-left: auto;
+}
+.operator-guidance {
+  margin-top: 8px;
+  font-size: 11px;
+  line-height: 1.6;
+  color: var(--muted);
+  overflow-wrap: anywhere;
+}
+.run-mode-badge {
+  display: inline-flex;
+  align-items: center;
+  font-family: ui-monospace, monospace;
+  font-size: 9px;
+  line-height: 1.5;
+  letter-spacing: 0.5px;
+  color: var(--amber);
+  padding: 3px 6px;
+  border: 1px solid #625134;
+  border-radius: 4px;
+  background: #3b3323;
+  margin-left: 8px;
+}
+.run-history-picker {
+  display: block;
+  width: 100%;
+  min-width: 0;
+  border: 1px solid #404639;
+  border-radius: 5px;
+  background: #131610;
+  color: #d8dece;
+  padding: 10px;
+  font-size: 11px;
+  text-overflow: ellipsis;
+}
+.run-history-picker + .field-hint {
+  margin-bottom: 18px;
 }
 .trace-panel .readiness-box {
   border-top: 0;

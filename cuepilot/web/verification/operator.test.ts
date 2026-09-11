@@ -4,6 +4,12 @@ import { fixtureClient } from "../src/fixtures/fixture-client";
 import { getClient } from "../src/lib/api-client";
 import { ClientError, DEFAULT_NOTES, liveCompletion } from "../src/lib/model";
 import type { Evidence, Run } from "../src/lib/model";
+import {
+  cueGuidance,
+  readRunMode,
+  saveRunMode,
+  unfinishedRun,
+} from "../src/lib/operator-state";
 
 const trace = (
   status: Evidence["status"],
@@ -29,6 +35,139 @@ const run = (overrides: Partial<Run> = {}): Run => ({
   createdAt: "2026-09-11T00:00:00Z",
   updatedAt: "2026-09-11T00:00:00Z",
   ...overrides,
+});
+
+test("mode preference survives reload per source and fixture always stays Practice", () => {
+  const values = new Map<string, string>();
+  const storage = {
+    getItem: (key: string) => values.get(key) ?? null,
+    setItem: (key: string, value: string) => values.set(key, value),
+  };
+  assert.equal(readRunMode("api", storage), "live");
+  assert.equal(readRunMode("fixture", storage), "practice");
+  saveRunMode("api", "practice", storage);
+  assert.equal(readRunMode("api", storage), "practice");
+  saveRunMode("fixture", "live", storage);
+  assert.equal(readRunMode("fixture", storage), "practice");
+  assert.equal(readRunMode("api", storage), "practice");
+  saveRunMode("api", "live", storage);
+  assert.equal(readRunMode("api", storage), "live");
+  values.set("cuepilot.run-mode.api", "corrupt-value");
+  assert.equal(readRunMode("api", storage), "live");
+});
+
+test("unavailable preference storage does not interrupt the operator session", () => {
+  const storage = {
+    getItem: (): string | null => {
+      throw new Error("Storage denied");
+    },
+    setItem: () => {
+      throw new Error("Storage denied");
+    },
+  };
+  assert.equal(readRunMode("api", storage), "live");
+  assert.equal(saveRunMode("api", "practice", storage), "practice");
+  assert.equal(saveRunMode("fixture", "live", storage), "practice");
+});
+
+test("unfinished runs remain available for completion or cancellation before replacement", () => {
+  for (const status of [
+    "queued",
+    "needs_approval",
+    "approved",
+    "running",
+  ] as const)
+    assert.equal(unfinishedRun({ status }), true);
+  for (const status of ["completed", "blocked", "failed"] as const)
+    assert.equal(unfinishedRun({ status }), false);
+  assert.equal(unfinishedRun(null), false);
+});
+
+test("completed Practice explains holding and the next segment without claiming sponsor verification", () => {
+  const completed = cueGuidance(run({ executionMode: "practice" }), {
+    scene: "holding",
+    revision: 12,
+    speakerId: null,
+    title: "Holding",
+    subtitle: "CuePilot",
+    assetId: null,
+    reason: null,
+    updatedAt: "2026-09-11T00:00:00Z",
+  });
+  assert.equal(completed.title, "Segment finished");
+  assert.match(completed.detail, /stage is holding/);
+  assert.match(completed.detail, /create a new run/);
+  assert.match(completed.detail, /Practice used a fixture plan/);
+  assert.doesNotMatch(completed.detail, /execution is verified/);
+  assert.match(
+    cueGuidance(run(), null).detail,
+    /live verification is incomplete/,
+  );
+});
+
+test("operator guidance follows approval, failure, retry and live execution states", () => {
+  assert.equal(
+    cueGuidance(run({ status: "needs_approval" }), null).title,
+    "Review and approve the plan",
+  );
+  assert.equal(
+    cueGuidance(run({ status: "queued" }), null).title,
+    "Preparing the plan",
+  );
+  assert.equal(
+    cueGuidance(run({ status: "approved" }), null).title,
+    "Ready to execute live",
+  );
+  assert.equal(
+    cueGuidance(run({ status: "running" }), null).title,
+    "Live sequence running",
+  );
+  assert.equal(
+    cueGuidance(run({ status: "approved" }), null, { executeRequested: true })
+      .title,
+    "Execution requested",
+  );
+  assert.equal(
+    cueGuidance(run({ status: "approved" }), null, { stalePlan: true }).title,
+    "Plan needs to be replaced",
+  );
+  const blocked = cueGuidance(
+    run({ status: "blocked", reason: "Presentation missing." }),
+    null,
+  );
+  assert.equal(blocked.title, "Run blocked");
+  assert.match(blocked.detail, /Presentation missing/);
+  assert.equal(
+    cueGuidance(run({ status: "blocked" }), null, { retry: true }).title,
+    "Reconcile the previous cue",
+  );
+});
+
+test("practice guidance names the exact next cue from the returned plan", () => {
+  const active = run({
+    executionMode: "practice",
+    status: "approved",
+    nextStep: 1,
+    plan: {
+      id: "plan",
+      hash: "hash",
+      recipeId: "recipe",
+      recipeVersion: 1,
+      showRevision: 9,
+      speakerId: "maya",
+      origin: "fixture",
+      cues: [
+        { index: 0, scene: "intro" },
+        { index: 1, scene: "presentation" },
+        { index: 2, scene: "holding" },
+      ],
+    },
+  });
+  assert.equal(cueGuidance(active, null).title, "Next: Bring up presentation");
+  assert.equal(
+    cueGuidance({ ...active, nextStep: 2, status: "running" }, null).title,
+    "Next: Return to holding",
+  );
 });
 
 test("physical completion alone never claims verified live execution", () => {

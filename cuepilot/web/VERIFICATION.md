@@ -1,6 +1,49 @@
 # Frontend verification — 2026-09-11
 
-## Current integrated status — 22:35 UTC
+## UI regression verification — 23:20 UTC
+
+The reported holding/revision confusion is addressed by named cue controls,
+explicit completion guidance, a persisted per-source run mode, a saved run
+selection and a Run history picker. Success acknowledgements dismiss after five
+seconds; persistent errors and unresolved cue retries remain visible. Configuration revision is explained as a
+setup counter; current scene and accepted cue counts are shown separately.
+The projector reads only stage state and does not depend on run history.
+
+- 12 transport and 10 operator checks pass. TypeScript/Vite build, formatting
+  and whitespace checks pass.
+- Chrome on an isolated real local API passed eight core flow checks: explicit
+  Practice creation and exact-plan approval; introduction, presentation and
+  holding on both desk and projector; three canonical receipts; fixed show
+  revision with advancing stage revision; clear completion; read-only history;
+  and saved Live selection across reload with no execution mutation.
+- The original browser pass found horizontal overflow at 390px. CSS corrections
+  were retested separately at 390px and 320px with no horizontal overflow. The
+  1366×768 projector fits and preserves the exact API title. This targeted
+  follow-up was read-only and did not repeat the completed core flow.
+- Browser evidence is private at
+  `cuepilot/.runtime/browser-demo/aggregate-checks.json`; the initial core run
+  and final layout retest retain separate reports and screenshots.
+- A final read-only Chrome check confirmed success notices disappear within
+  seven seconds (observed 5.44 seconds), without API writes or browser errors.
+- Final full Snyk scan at 23:20 UTC completed: no source findings and the same
+  six root/optional dependency advisories. No dependency changes or ignores
+  were introduced by these UI fixes.
+
+The separate live browser check at 23:18 UTC selected existing sponsor plan
+`041c579d-c84c-4601-a823-c9e89a74c3f6` from history, approved it, and requested
+execution through the desk. Both desk and projector displayed Maya's intro and
+presentation; the final stage was holding at revision 61 with three receipts.
+The desk displayed `live verified`, and all ten returned trace entries were
+verified, including Cognee, HydraDB, Hotdata, Rote replay and RocketRide execute.
+Evidence is private at `cuepilot/.runtime/browser-fix-check/live-ui/checks.json`.
+This reused an already-prepared plan; it does not claim a new browser-based
+learning pass or an end-to-end speed improvement.
+
+The isolated browser practice checks above use fixture planning with real local
+stage writes and receipts; sponsor execution was verified separately. Presentation assets currently
+carry title metadata; this UI does not embed slide files, websites or videos.
+
+## Earlier integrated status — 22:35 UTC
 
 Full live API acceptance subsequently passed: Maya learned, Ravi replayed the
 same package with three new receipts, and Alex stopped after one introduction

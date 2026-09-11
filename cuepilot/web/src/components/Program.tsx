@@ -5,11 +5,13 @@ export function Program({
   source,
   connected,
   full = false,
+  loading = false,
 }: {
   stage: Stage | null;
   source: Source;
   connected: boolean;
   full?: boolean;
+  loading?: boolean;
 }) {
   const Heading = full ? "h1" : "h3";
   const onProgram = stage && stage.scene !== "holding";
@@ -24,17 +26,28 @@ export function Program({
         </span>
         <span className={`signal ${onProgram ? "signal-live" : ""}`}>
           <i />
-          {!connected ? "SIGNAL UNAVAILABLE" : onProgram ? "LIVE" : "HOLDING"}
+          {loading
+            ? "CONNECTING"
+            : !connected
+              ? "SIGNAL UNAVAILABLE"
+              : onProgram
+                ? "ON STAGE"
+                : "HOLDING"}
         </span>
       </div>
       <div className="program-body">
         {!stage ? (
           <>
-            <span className="program-kicker">AWAITING PROGRAM</span>
+            <span className="program-kicker">
+              {loading ? "CONNECTING TO PROGRAM" : "AWAITING PROGRAM"}
+            </span>
             <Heading>Stand by.</Heading>
-            <p>
-              Waiting for stage state from the{" "}
-              {source === "api" ? "API" : "fixture adapter"}.
+            <p role={!loading && !connected ? "alert" : undefined}>
+              {full
+                ? loading
+                  ? "Connecting to the stage."
+                  : "The program will resume when the stage connection is restored."
+                : `Waiting for stage state from the ${source === "api" ? "API" : "fixture adapter"}.`}
             </p>
           </>
         ) : (
@@ -48,7 +61,9 @@ export function Program({
             </span>
             <Heading>{stage.title}</Heading>
             <p className="program-subtitle">{stage.subtitle}</p>
-            {stage.reason && <p className="program-reason">{stage.reason}</p>}
+            {!full && stage.reason && (
+              <p className="program-reason">{stage.reason}</p>
+            )}
           </>
         )}
       </div>
@@ -56,7 +71,9 @@ export function Program({
         <span>
           {source === "fixture"
             ? "FIXTURE DATA · LOCAL UI REHEARSAL"
-            : "API STAGE STATE"}
+            : full
+              ? "CUEPILOT"
+              : "API STAGE STATE"}
         </span>
         {stage?.scene === "presentation" ? (
           <ArrowUpRight size={28} />

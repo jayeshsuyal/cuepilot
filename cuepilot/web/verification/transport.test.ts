@@ -5,6 +5,108 @@ import { ClientError } from "../src/lib/model";
 import { readIntent, sendCue } from "../src/lib/cue-intent";
 import type { CuePilotClient } from "../src/lib/model";
 const realFetch = globalThis.fetch;
+test("projector reads only current stage and never depends on selected run or history", async () => {
+  const calls: string[] = [];
+  globalThis.fetch = async (input) => {
+    const url = String(input);
+    calls.push(url);
+    if (url !== "/api/v1/stage")
+      throw new Error("Unrelated run service unavailable");
+    return new Response(
+      JSON.stringify({
+        scene: "presentation",
+        title: "Current presentation",
+        revision: 17,
+      }),
+    );
+  };
+  try {
+    const stage = await getClient("api").readStage();
+    assert.equal(stage.scene, "presentation");
+    assert.equal(stage.revision, 17);
+    assert.deepEqual(calls, ["/api/v1/stage"]);
+  } finally {
+    globalThis.fetch = realFetch;
+  }
+});
+test("history selection reads an existing run without mutating the run or stage", async () => {
+  const calls: { url: string; method: string }[] = [];
+  const historyRun = {
+    id: "history-run",
+    speakerId: "maya",
+    status: "completed",
+    executionMode: "live",
+    createdAt: "2026-09-11T12:00:00Z",
+    nextStep: 3,
+    notes: "Private notes omitted from history rows",
+  };
+  globalThis.fetch = async (input, options) => {
+    const url = String(input);
+    calls.push({ url, method: options?.method ?? "GET" });
+    return new Response(
+      JSON.stringify(
+        url === "/api/v1/runs"
+          ? [historyRun]
+          : url.endsWith("/history-run")
+            ? historyRun
+            : url.endsWith("/stage")
+              ? { scene: "holding" }
+              : { revision: 1 },
+      ),
+    );
+  };
+  try {
+    const client = getClient("api");
+    const history = await client.listRuns();
+    assert.equal(history[0].id, "history-run");
+    assert.equal("notes" in history[0], false);
+    await client.selectRun(history[0].id);
+    const snapshot = await client.read();
+    assert.equal(snapshot.run?.id, "history-run");
+    assert.equal(snapshot.stage.scene, "holding");
+    assert.ok(calls.every((call) => call.method === "GET"));
+  } finally {
+    globalThis.fetch = realFetch;
+  }
+});
+test("a removed selected run recovers from current API history without fixture fallback", async () => {
+  let removed = false;
+  const replacement = {
+    id: "replacement-run",
+    speakerId: "ravi",
+    executionMode: "practice",
+    status: "completed",
+  };
+  globalThis.fetch = async (input) => {
+    const url = String(input);
+    if (url.endsWith("/removed-run"))
+      return removed
+        ? new Response(
+            JSON.stringify({
+              detail: { code: "run_not_found", message: "Run removed" },
+            }),
+            { status: 404 },
+          )
+        : new Response(JSON.stringify({ id: "removed-run" }));
+    return new Response(
+      JSON.stringify(
+        url === "/api/v1/runs"
+          ? [replacement]
+          : url.endsWith("/stage")
+            ? { scene: "holding" }
+            : { revision: 1 },
+      ),
+    );
+  };
+  try {
+    const client = getClient("api");
+    await client.selectRun("removed-run");
+    removed = true;
+    assert.equal((await client.read()).run?.id, "replacement-run");
+  } finally {
+    globalThis.fetch = realFetch;
+  }
+});
 function store(): Storage {
   const data = new Map<string, string>();
   return {

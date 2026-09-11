@@ -23,12 +23,15 @@ import { Program } from "./components/Program";
 import { ClientError, DEFAULT_NOTES, liveCompletion } from "./lib/model";
 import type { Evidence, RunMode, Scene, Source } from "./lib/model";
 import { useDesk } from "./lib/use-desk";
+import {
+  cueGuidance,
+  cueLabels,
+  readRunMode,
+  saveRunMode,
+  unfinishedRun,
+} from "./lib/operator-state";
+import { useStage } from "./lib/use-stage";
 
-const cueLabels: Record<Scene, string> = {
-  intro: "Introduce speaker",
-  presentation: "Bring up presentation",
-  holding: "Return to holding",
-};
 const cueDetails: Record<Scene, string> = {
   intro: "Name and introduction on program",
   presentation: "Presentation readiness checked at cue time",
@@ -96,7 +99,8 @@ function Desk({
   const [selectedId, setSelectedId] = useState("");
   const [notes, setNotes] = useState(DEFAULT_NOTES);
   const [notesDirty, setNotesDirty] = useState(false);
-  const [mode, setMode] = useState<RunMode>("practice");
+  const [mode, setMode] = useState<RunMode>(() => readRunMode(source));
+  const changeMode = (next: RunMode) => setMode(saveRunMode(source, next));
   const [cancelling, setCancelling] = useState(false);
   const [executeSent, setExecuteSent] = useState<string | null>(() =>
     sessionStorage.getItem("cuepilot.execute-requested"),
@@ -123,7 +127,8 @@ function Desk({
   const stalePlan = Boolean(
     plan && show && plan.showRevision !== show.revision,
   );
-  const working = Boolean(run && run.status === "running");
+  const pendingRun =
+    desk.runs.find(unfinishedRun) ?? (unfinishedRun(run) ? run : null);
   const completion = liveCompletion(run);
   const liveCuesCompleted =
     run?.executionMode === "live" && completion.physicalCompleted;
@@ -134,16 +139,30 @@ function Desk({
   const approved = Boolean(run && ["approved", "running"].includes(run.status));
   const canApprove = run?.status === "needs_approval" && plan && !stalePlan;
   const canAdvance = Boolean(
-    run?.executionMode === "practice" && approved && nextCue,
+    run?.executionMode === "practice" && approved && nextCue && !stalePlan,
   );
   const canExecute =
     run?.executionMode === "live" &&
     run.status === "approved" &&
     plan?.origin === "sponsor" &&
+    !stalePlan &&
     executeSent !== run.id;
+  const guidance = cueGuidance(run, stage, {
+    retry: !!retry,
+    stalePlan,
+    executeRequested: run?.id === executeSent,
+  });
+  const stageLabel = stage
+    ? {
+        holding: "Holding",
+        intro: "Introduction",
+        presentation: "Presentation",
+      }[stage.scene]
+    : "Waiting for stage";
   const stageUrl = source === "fixture" ? "/stage?source=fixture" : "/stage";
   const createRun = () =>
     selected &&
+    !pendingRun &&
     desk.act(() =>
       client.createRun(
         selected.id,
@@ -251,10 +270,16 @@ function Desk({
             </p>
           </div>
           <div className="show-meta">
-            <span className="eyebrow">SHOW REVISION</span>
-            <strong>
-              {show ? String(show.revision).padStart(2, "0") : "—"}
-            </strong>
+            <span className="eyebrow">STAGE STATUS</span>
+            <strong>{stageLabel}</strong>
+            <span>
+              {plan && run
+                ? `${run.receipts.length} / ${plan.cues.length} cues accepted in viewed run`
+                : "No cue sequence selected"}
+            </span>
+            <small title="The configuration revision changes when show setup is edited; it is not a cue count.">
+              Configuration revision {show?.revision ?? "—"} · setup changes
+            </small>
           </div>
         </div>
         {readError && (
@@ -282,7 +307,7 @@ function Desk({
             <div className="setup-content">
               <fieldset disabled={disabled || !!retry}>
                 <legend className="field-label">
-                  Speaker <span>FOR THE NEXT PLAN</span>
+                  Next speaker <span>FOR THE NEXT PLAN</span>
                 </legend>
                 <div className="speakers">
                   {show ? (
@@ -348,7 +373,7 @@ function Desk({
                       name="mode"
                       value="practice"
                       checked={mode === "practice"}
-                      onChange={() => setMode("practice")}
+                      onChange={() => changeMode("practice")}
                     />
                     <Square size={13} /> Practice
                   </label>
@@ -358,15 +383,18 @@ function Desk({
                       name="mode"
                       value="live"
                       checked={mode === "live"}
-                      onChange={() => setMode("live")}
+                      onChange={() => changeMode("live")}
+                      disabled={source === "fixture"}
                     />
                     <Radio size={14} /> Live
                   </label>
                 </div>
                 <p className="mode-help">
-                  {mode === "practice"
-                    ? "Local UI rehearsal. A fixture plan with operator-controlled cues."
-                    : "Requires verified sponsor work. Account or setup gates may block this run."}
+                  {source === "fixture"
+                    ? "Fixture data only supports Practice. Select Local API for Live."
+                    : mode === "practice"
+                      ? "A fixture plan with operator-controlled cues. This choice is saved for Local API."
+                      : "Uses sponsor services after you create and approve a plan, then execute. This choice is saved for Local API."}
                 </p>
               </fieldset>
               <button
@@ -376,7 +404,7 @@ function Desk({
                   !selected ||
                   !notes.trim() ||
                   !!retry ||
-                  working ||
+                  !!pendingRun ||
                   (source === "fixture" && mode === "live")
                 }
                 onClick={() => void createRun()}
@@ -398,9 +426,11 @@ function Desk({
                   Select Local API to create a live run.
                 </p>
               )}
-              {working && (
+              {pendingRun && (
                 <p className="field-hint">
-                  Finish the current segment before starting another.
+                  Finish or cancel the unfinished run before creating another.
+                  {pendingRun.id !== run?.id &&
+                    " Select it in Run history to continue."}
                 </p>
               )}
             </div>
@@ -437,46 +467,56 @@ function Desk({
               <div className="cue-control">
                 <div>
                   <span className="eyebrow">CUE CONTROL</span>
-                  <strong>
-                    {retry
-                      ? "Reconcile the previous cue"
-                      : run?.status === "blocked"
-                        ? "Run blocked"
-                        : nextCue
-                          ? cueLabels[nextCue.scene]
-                          : run?.status === "completed"
-                            ? liveCuesCompleted
-                              ? completion.fullyVerified
-                                ? "Live execution verified"
-                                : "Cues completed; verification incomplete"
-                              : "Segment complete"
-                            : "Awaiting a plan"}
-                  </strong>
+                  {run && (
+                    <span className="run-mode-badge">
+                      Viewing{" "}
+                      {run.executionMode === "live" ? "Live" : "Practice"} run
+                    </span>
+                  )}
+                  <strong>{guidance.title}</strong>
+                  <p className="operator-guidance">{guidance.detail}</p>
                 </div>
-                {run?.executionMode === "live" ? (
+                {retry ? (
                   <button
                     className="button primary"
-                    disabled={disabled || !canExecute || !!retry}
+                    disabled={disabled}
+                    onClick={() => void desk.advance()}
+                  >
+                    <RefreshCw size={16} /> Retry same cue
+                  </button>
+                ) : canExecute ? (
+                  <button
+                    className="button primary"
+                    disabled={disabled}
                     onClick={execute}
                   >
                     <Radio size={16} />
-                    {executeSent === run.id
-                      ? "Execution requested"
-                      : "Execute live"}
+                    Execute live sequence
                   </button>
-                ) : (
+                ) : canAdvance && nextCue ? (
                   <button
                     className="button primary"
-                    disabled={disabled || (!canAdvance && !retry)}
+                    disabled={disabled}
                     onClick={() => void desk.advance()}
                   >
-                    {retry ? <RefreshCw size={16} /> : <ArrowRight size={16} />}
-                    {retry ? "Retry same cue" : "Next cue"}
+                    <ArrowRight size={16} /> {cueLabels[nextCue.scene]}
                   </button>
-                )}
+                ) : run?.status === "needs_approval" ||
+                  (stalePlan && unfinishedRun(run)) ? (
+                  <a className="button secondary" href="#plan-review">
+                    Review plan <ArrowRight size={16} />
+                  </a>
+                ) : !unfinishedRun(run) ? (
+                  <a className="button secondary" href="#desk-controls">
+                    {run?.status === "blocked" || run?.status === "failed"
+                      ? "Set up recovery run"
+                      : "Set up next segment"}{" "}
+                    <ArrowRight size={16} />
+                  </a>
+                ) : null}
               </div>
             </section>
-            <section className="panel plan-panel">
+            <section className="panel plan-panel" id="plan-review">
               <div className="panel-heading">
                 <span className="section-number">03</span>
                 <h2>Review & direct</h2>
@@ -491,6 +531,39 @@ function Desk({
                 </span>
               </div>
               <div className="plan-content">
+                <label className="field-label" htmlFor="run-history">
+                  Run history <span>VIEW A RUN AND ITS RECEIPTS</span>
+                </label>
+                <select
+                  id="run-history"
+                  aria-label="Run history"
+                  className="run-history-picker"
+                  value={run?.id ?? ""}
+                  disabled={busy || !!retry || !connected || !desk.runs.length}
+                  onChange={(event) => void desk.selectRun(event.target.value)}
+                >
+                  {!desk.runs.length && <option value="">No runs yet</option>}
+                  {desk.runs.map((entry) => (
+                    <option key={entry.id} value={entry.id}>
+                      {show?.speakers.find(
+                        (speaker) => speaker.id === entry.speakerId,
+                      )?.name ?? entry.speakerId}{" "}
+                      · {entry.executionMode === "live" ? "Live" : "Practice"} ·{" "}
+                      {entry.status.replaceAll("_", " ")} ·{" "}
+                      {new Date(entry.createdAt).toLocaleString()} ·{" "}
+                      {entry.id.slice(0, 8)}
+                    </option>
+                  ))}
+                </select>
+                <p className="field-hint">
+                  Viewing this run's plan and receipts. Program preview always
+                  shows the current stage.
+                </p>
+                {desk.historyError && (
+                  <p className="field-hint" role="status">
+                    Run history unavailable: {desk.historyError}
+                  </p>
+                )}
                 {plan && run ? (
                   <>
                     <div className="plan-summary">
@@ -650,29 +723,33 @@ function Desk({
                   </div>
                 )}
                 <div className="plan-actions">
-                  <button
-                    className="button secondary"
-                    disabled={disabled || !canApprove || !!retry}
-                    onClick={() =>
-                      run &&
-                      plan &&
-                      void desk.act(() => client.approve(run.id, plan.hash))
-                    }
-                  >
-                    <Check size={16} /> Approve plan
-                  </button>
-                  <button
-                    className="button secondary"
-                    disabled={disabled || !canCancel || !!retry}
-                    onClick={cancel}
-                  >
-                    {cancelling ? (
-                      <LoaderCircle className="spin" size={16} />
-                    ) : (
-                      <Square size={16} />
-                    )}
-                    {cancelling ? "Cancelling…" : "Cancel run"}
-                  </button>
+                  {run?.status === "needs_approval" && (
+                    <button
+                      className="button secondary"
+                      disabled={disabled || !canApprove || !!retry}
+                      onClick={() =>
+                        run &&
+                        plan &&
+                        void desk.act(() => client.approve(run.id, plan.hash))
+                      }
+                    >
+                      <Check size={16} /> Approve plan
+                    </button>
+                  )}
+                  {canCancel && (
+                    <button
+                      className="button secondary"
+                      disabled={disabled || !canCancel || !!retry}
+                      onClick={cancel}
+                    >
+                      {cancelling ? (
+                        <LoaderCircle className="spin" size={16} />
+                      ) : (
+                        <Square size={16} />
+                      )}
+                      {cancelling ? "Cancelling…" : "Cancel run"}
+                    </button>
+                  )}
                 </div>
                 {cancelling && (
                   <p className="field-hint" role="status">
@@ -880,23 +957,19 @@ function Desk({
   );
 }
 function StagePage({ source }: { source: Source }) {
-  const { snapshot, connected, readError } = useDesk(source);
+  const { stage, connected, loading } = useStage(source);
   useEffect(() => {
     document.title = "CuePilot · Program output";
   }, []);
   return (
     <main className="stage-page">
       <Program
-        stage={snapshot?.stage ?? null}
+        stage={stage}
         source={source}
         connected={connected}
+        loading={loading}
         full
       />
-      {readError && !snapshot && (
-        <p className="stage-connection-message" role="alert">
-          {readError}
-        </p>
-      )}
     </main>
   );
 }

@@ -6,7 +6,7 @@ import type {
   Stage,
 } from "../../../contracts/api";
 import { ClientError, receiptMessage } from "./model";
-import type { CuePilotClient, Source } from "./model";
+import type { CuePilotClient, RunSummary, Source } from "./model";
 import { fixtureClient } from "../fixtures/fixture-client";
 
 const BASE = "/api/v1";
@@ -59,19 +59,87 @@ async function request<T>(
   return data as T;
 }
 const id = encodeURIComponent;
-let currentRunId: string | null = null;
+const runSelectionKey = "cuepilot.api.selected-run";
+function savedRun(): string | null {
+  try {
+    return typeof sessionStorage === "undefined"
+      ? null
+      : sessionStorage.getItem(runSelectionKey);
+  } catch {
+    return null;
+  }
+}
+let currentRunId: string | null = savedRun();
+function selectCurrentRun(runId: string | null) {
+  currentRunId = runId;
+  try {
+    if (typeof sessionStorage === "undefined") return;
+    if (runId) sessionStorage.setItem(runSelectionKey, runId);
+    else sessionStorage.removeItem(runSelectionKey);
+  } catch {
+    /* Storage restrictions do not prevent reading the selected run. */
+  }
+}
+const summarizeRun = ({
+  id,
+  speakerId,
+  executionMode,
+  status,
+  createdAt,
+  nextStep,
+}: Run): RunSummary => ({
+  id,
+  speakerId,
+  executionMode,
+  status,
+  createdAt,
+  nextStep,
+});
+async function readCurrentRun(): Promise<Run | Run[]> {
+  if (!currentRunId) return request<Run[]>("/runs");
+  const selected = currentRunId;
+  try {
+    return await request<Run>(`/runs/${id(selected)}`);
+  } catch (error) {
+    if (
+      !(error instanceof ClientError) ||
+      !["run_not_found", "HTTP_404"].includes(error.code)
+    )
+      throw error;
+    if (currentRunId === selected) selectCurrentRun(null);
+    else if (currentRunId) return request<Run>(`/runs/${id(currentRunId)}`);
+    return request<Run[]>("/runs");
+  }
+}
 const apiClient: CuePilotClient = {
   source: "api",
+  readStage() {
+    return request<Stage>("/stage");
+  },
+  async listRuns() {
+    return (await request<Run[]>("/runs")).map(summarizeRun);
+  },
+  async selectRun(runId) {
+    const run = await request<Run>(`/runs/${id(runId)}`);
+    if (run.id !== runId)
+      throw new ClientError(
+        "The selected run could not be confirmed.",
+        "RUN_ID_MISMATCH",
+      );
+    selectCurrentRun(run.id);
+    return {
+      message:
+        "Viewing the selected run. The stage continues to show current output.",
+    };
+  },
   async read() {
     const [show, stage, current] = await Promise.all([
       request<Show>("/show"),
       request<Stage>("/stage"),
-      currentRunId
-        ? request<Run>(`/runs/${id(currentRunId)}`)
-        : request<Run[]>("/runs"),
+      readCurrentRun(),
     ]);
     const run = Array.isArray(current) ? (current[0] ?? null) : current;
-    if (!currentRunId && run) currentRunId = run.id;
+    if (!currentRunId && run) selectCurrentRun(run.id);
     return { show, stage, run };
   },
   async setSpeakerReady(speakerId, ready, expectedRevision) {
@@ -100,7 +168,7 @@ const apiClient: CuePilotClient = {
       executionMode,
       notes,
     });
-    currentRunId = run.id;
+    selectCurrentRun(run.id);
     return {
       message: `API created ${run.executionMode} run: ${run.status.replaceAll("_", " ")}.`,
     };
@@ -122,9 +190,10 @@ const apiClient: CuePilotClient = {
     return { message: receiptMessage(receipt) };
   },
   async execute(runId) {
-    const run = await request<Run>(`/runs/${id(runId)}/execute`, "POST", {});
+    await request<Run>(`/runs/${id(runId)}/execute`, "POST", {});
     return {
-      message: `API accepted the execution request. Current status: ${run.status.replaceAll("_", " ")}. Waiting for returned evidence and receipts.`,
+      message:
+        "Execution request acknowledged. Follow the run status, stage output, and returned evidence.",
     };
   },
   async cancel(runId) {

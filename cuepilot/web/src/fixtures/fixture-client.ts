@@ -163,6 +163,28 @@ async function mutate(fn: (s: Store) => Promise<string> | string) {
 }
 export const fixtureClient: CuePilotClient = {
   source: "fixture",
+  async readStage() {
+    return load().stage;
+  },
+  async listRuns() {
+    const run = load().run;
+    return run
+      ? [
+          {
+            id: run.id,
+            speakerId: run.speakerId,
+            executionMode: run.executionMode,
+            status: run.status,
+            createdAt: run.createdAt,
+            nextStep: run.nextStep,
+          },
+        ]
+      : [];
+  },
+  async selectRun(id) {
+    requireRun(load(), id);
+    return { message: "Viewing the current fixture run." };
+  },
   async read() {
     return load();
   },

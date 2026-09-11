@@ -31,24 +31,30 @@ The client never receives or stores the credential. Read-only GETs need no token
 
 1. Choose a speaker, edit production notes, and choose **Practice**. The speaker
    selection and notes are drafts for the next run; they do not change the stage.
+   Local API starts in **Live** for a new browser profile and remembers an
+   explicit mode choice across reloads. Fixture data always uses **Practice**.
 2. **Create practice run**, inspect the returned three cues and plan details,
    then **Approve plan**. Approval sends the exact returned plan hash.
-3. **Next cue** advances introduction → presentation → holding. The API decides
-   the next step and returns a committed receipt. There are no automatic scene
-   transitions or invented playback progress.
+3. Use the named cue buttons: **Introduce speaker**, **Bring up presentation**,
+   then **Return to holding**. The API decides the next step and returns a
+   committed receipt. Practice requires an operator action for each cue. At
+   **Segment finished**, holding is the expected final scene; choose a speaker
+   and create another run to continue.
 4. For the interruption demonstration, create and approve another practice run,
    advance the introduction, then turn off **Presentation**. The backend puts
    the stage on holding and supplies the reason. Restore presentation readiness,
    create a recovery plan, approve it, and advance its three cues.
-5. **Live** creates a sponsor-backed preparation request. **Execute live** is
-   available only for a returned approved sponsor plan. Full live API acceptance
-   passed on the configured demo machine at 22:35 UTC on September 11, 2026;
+5. With **Live** selected, **Create live run** sends a sponsor-backed preparation
+   request. **Execute live sequence** is available only for a returned approved
+   sponsor plan. Selecting a mode or reloading never starts execution. Full live
+   API acceptance passed on the configured demo machine at 22:35 UTC on September 11, 2026;
    see [sponsor readiness](../../docs/sponsor-readiness.md). A fresh checkout
    still needs private service setup and a learned play. Inspect the returned
    provider evidence in the trace.
 
-For the prepared live demo, select **Local API**, then **Live** after every page
-reload (the mode resets to **Practice**). Follow the
+For the prepared live demo, select **Local API** and confirm **Live** under
+**New run mode**. This saved preference controls the next run; **Viewing Live run**
+or **Viewing Practice run** identifies the selected run separately. Follow the
 [recording guide](../../docs/demo-recording.md) for Ravi replay and the Alex
 readiness block. Leave production notes unedited to reuse the backend's current
 rules. The button may read **Create recovery plan** when the displayed run is
@@ -61,10 +67,18 @@ it resolves. Known API rejections clear the intent, display the backend error,
 and refresh state. Every mutation is followed by a read. Show, stage, and the
 tracked run are polled every 500 ms with overlapping polls suppressed.
 
-On first load, the latest item returned by `GET /runs` is selected. Thereafter
-the desk polls `GET /runs/:id`; creating a run selects its returned ID. The frozen
-contract has no `runs/current` endpoint. Readiness controls send `expectedRevision`
-for the current show. The stage uses the exact `Stage.title`, `subtitle`, `scene`,
+Without a saved selection, the latest item returned by `GET /runs` is selected.
+**Run history** selects earlier plans, provider evidence, and receipts; the
+selection survives reloads in the same tab. The desk polls `GET /runs/:id`, and
+creating a run selects its returned ID. History refreshes every ten seconds and
+after operator actions. Changing the selected run does not replay it or change
+the stage. Finish or cancel an unfinished run before creating another; select
+it from history when needed. The frozen contract has no `runs/current` endpoint.
+
+**Stage status** reports the current scene, while the cue count identifies
+progress in the viewed run. **Configuration revision** tracks edits to show
+setup and is not a cue counter. Readiness controls send `expectedRevision` for
+the current show. The stage uses the exact `Stage.title`, `subtitle`, `scene`,
 `reason`, and `revision`; it has no fabricated slide URLs or progress fields.
 
 ## Explicit fixtures

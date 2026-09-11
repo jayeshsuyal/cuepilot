@@ -3,6 +3,21 @@ import react from "@vitejs/plugin-react";
 
 // The proxy holds the credential. No define, VITE_ variable, or client import.
 export default defineConfig(({ mode }) => {
+  // Server-only, loopback-only override for isolated browser verification.
+  const apiUrl = new URL(
+    process.env.CUEPILOT_API_URL ?? "http://127.0.0.1:8787",
+  );
+  if (
+    apiUrl.protocol !== "http:" ||
+    apiUrl.hostname !== "127.0.0.1" ||
+    apiUrl.username ||
+    apiUrl.password ||
+    apiUrl.pathname !== "/" ||
+    apiUrl.search ||
+    apiUrl.hash
+  ) {
+    throw new Error("CUEPILOT_API_URL must be a plain loopback HTTP origin.");
+  }
   const token =
     process.env.CUEPILOT_OPERATOR_TOKEN ??
     loadEnv(mode, process.cwd(), "CUEPILOT_").CUEPILOT_OPERATOR_TOKEN;
@@ -38,7 +53,7 @@ export default defineConfig(({ mode }) => {
       cors: false,
       proxy: {
         "/api": {
-          target: "http://127.0.0.1:8787",
+          target: apiUrl.origin,
           changeOrigin: true,
           configure(proxy) {
             proxy.on("proxyReq", (proxyReq, req) => {

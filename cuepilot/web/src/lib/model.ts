@@ -20,10 +20,17 @@ export type {
 export type Source = "api" | "fixture";
 export type RunMode = Run["executionMode"];
 export type Snapshot = { show: Show; stage: Stage; run: Run | null };
+export type RunSummary = Pick<
+  Run,
+  "id" | "speakerId" | "executionMode" | "status" | "createdAt" | "nextStep"
+>;
 export type ActionResult = { message: string };
 export interface CuePilotClient {
   source: Source;
   read(): Promise<Snapshot>;
+  readStage(): Promise<Stage>;
+  listRuns(): Promise<RunSummary[]>;
+  selectRun(id: string): Promise<ActionResult>;
   setSpeakerReady(
     id: string,
     ready: boolean,
